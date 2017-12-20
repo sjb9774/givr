@@ -8,7 +8,7 @@ class TestRoom(unittest.TestCase):
     def test_new_room_has_id(self):
         r = Room()
         self.assertTrue(r.room_id)
-        self.assertEqual(r.room_id, Room.ROOM_ID_LEN)
+        self.assertEqual(len(r.room_id), Room.ROOM_ID_LEN)
 
     def test_open_room(self):
         r = Room()
@@ -39,7 +39,8 @@ class TestRoom(unittest.TestCase):
         r.add_user(u2)
         self.assertIn(u1, r.users)
         r.remove_user(u1)
-        self.assertIn(u1, r.users)
+        self.assertNotIn(u1, r.users)
+        self.assertIn(u2, r.users)
 
     def test_close_room(self):
         r = Room()
@@ -52,12 +53,13 @@ class TestRoom(unittest.TestCase):
         r.add_owner(o)
         r.close()
         self.assertFalse(r.is_open())
-        self.assertEqual(r.users, 0)
+        self.assertEqual(len(r.users), 0)
         self.assertEqual(r.owner, o)
 
     def test_add_users_to_unopened_room(self):
         r = Room()
         u = User()
         self.assertFalse(r.is_open())
-        self.assertRaises(RoomException, r.add_user(u))
+        with self.assertRaises(RoomException):
+            r.add_user(u)
 
