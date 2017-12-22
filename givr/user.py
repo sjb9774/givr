@@ -6,3 +6,9 @@ class User:
 
     def __init__(self):
         self.user_id = str(uuid.uuid1())
+
+    @staticmethod
+    def from_user_id(uid):
+        u = User()
+        u.user_id = uid
+        return u
