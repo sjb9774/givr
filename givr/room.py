@@ -68,8 +68,8 @@ class SocketRoom(Room):
             u = User.from_user_id(user_id)
             if command == "JOIN":
                 self.add_user(u)
+            elif command == "LEAVE":
+                self.remove_user(u)
             return "{room_id}:SUCCESS".format(room_id=self.room_id)
         else:
             return "{room_id}:FAIL".format(room_id=self.room_id)
-
-

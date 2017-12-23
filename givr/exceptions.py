@@ -1,2 +1,2 @@
-class RoomException(StandardError):
+class RoomException(BaseException):
     pass
