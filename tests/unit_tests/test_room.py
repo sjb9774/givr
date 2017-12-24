@@ -2,6 +2,7 @@ import unittest
 from givr.room import Room, SocketRoom
 from givr.user import User
 from givr.exceptions import RoomException
+from unittest.mock import Mock
 
 class TestRoom(unittest.TestCase):
 
@@ -73,6 +74,16 @@ class TestSocketRoom(unittest.TestCase):
         test_id = str(uuid.uuid1())
         msg = "USER:{uid}:JOIN".format(uid=test_id)
         self.room.open()
-        resp = self.room.handle_message("mock connection", msg)
+        resp = self.room.handle_message(Mock("mock connection"), msg)
         self.assertTrue(resp.endswith("SUCCESS"))
         self.assertEqual(test_id, self.room.users[0].user_id)
+
+    def test_handle_leave_message(self):
+        self.room.open()
+        u = User()
+        self.room.users = [u, User(), User(), User()]
+
+        msg = "USER:{uid}:LEAVE".format(uid=u.user_id)
+        resp = self.room.handle_message(Mock("mock connection"), msg)
+        self.assertTrue(resp.endswith("SUCCESS"))
+        self.assertNotIn(u, self.room.users)

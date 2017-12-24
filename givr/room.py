@@ -1,5 +1,6 @@
 from givr.exceptions import RoomException
 from givr.user import User
+from givr.socketmessage import SocketMessage, SocketCommand
 import uuid
 
 class Room:
@@ -31,12 +32,11 @@ class Room:
         self.add_user(user)
 
     def remove_user(self, user):
-        self.users.remove(user)
+        self.users = [u for u in self.users if user.user_id != u.user_id]
 
 import socket, select, re
 
 class SocketRoom(Room):
-    USER_MSG_REGEX = re.compile(r"USER:([\w\d\-]+):(\w+)")
 
     def _create_socket(self):
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -62,14 +62,14 @@ class SocketRoom(Room):
                     connections.remove(connection)
 
     def handle_message(self, connection, data):
-        matches = self.USER_MSG_REGEX.findall(data)
-        if matches[0]:
-            user_id, command = matches[0]
-            u = User.from_user_id(user_id)
-            if command == "JOIN":
-                self.add_user(u)
-            elif command == "LEAVE":
-                self.remove_user(u)
+        msg = SocketMessage.from_text(data)
+        user = User.from_user_id(msg.recipient)
+        try:
+            if msg.command == SocketCommand.JOIN:
+                self.add_user(user)
+            elif msg.command == SocketCommand.LEAVE:
+                self.remove_user(user)
             return "{room_id}:SUCCESS".format(room_id=self.room_id)
-        else:
+        except BaseException as err:
+            print(err)
             return "{room_id}:FAIL".format(room_id=self.room_id)
