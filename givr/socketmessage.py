@@ -1,9 +1,17 @@
 import re
-
+from givr.user import User
+from givr.exceptions import SocketMessageException
 class SocketMessage:
     MSG_REGEX = re.compile(r"(\w+):([\w\d\-]+):(\w+)")
+    UUID_REGEX = re.compile(r"[\w\d]{8}-[\w\d]{4}-[\w\d]{4}-[\w\d]{4}-[\w\d]{12}")
 
     def __init__(self, sender=None, recipient=None, command=None):
+        if sender and not self.UUID_REGEX.findall(sender):
+            raise SocketMessageException("Sender UUID '{uid}' invalid".format(uid=sender))
+        if recipient and not self.UUID_REGEX.findall(recipient):
+            raise SocketMessageException("Recipient UUID '{uid}' invalid".format(uid=recipient))
+        if command and command not in SocketCommandMetaClass.all_commands:
+            raise SocketMessageException("Command '{cmd}' invalid".format(cmd=command))
         self.sender = sender
         self.recipient = recipient
         self.command = command
@@ -22,14 +30,26 @@ class SocketMessage:
         matches = msg.MSG_REGEX.findall(text)
         if matches:
             sender, recipient, command = matches[0]
+        else:
+            raise SocketMessageException("Message text '{msg}' invalid".format(msg=text))
 
         msg.sender = sender
         msg.recipient = recipient
         msg.command = command
         return msg
 
-class SocketCommand:
+class SocketCommandMetaClass(type):
 
-    JOIN = "JOIN"
-    LEAVE = "LEAVE"
-    ENTER = "ENTER"
+    all_commands = {
+        "JOIN": "JOIN",
+        "ENTER": "ENTER",
+        "LEAVE": "LEAVE"
+    }
+
+    def __init__(self, name, bases, namespace):
+        super(SocketCommandMetaClass, self).__init__(name, bases, namespace)
+        for command, value in self.all_commands.items():
+            setattr(self, command, value)
+
+class SocketCommand(metaclass=SocketCommandMetaClass):
+    pass
