@@ -30,3 +30,14 @@ class TestSocketMessage(unittest.TestCase):
         with self.assertRaises(SocketMessageException) as err:
             msg = SocketMessage(sender=self.good_uid1, recipient=self.good_uid2, command=self.bad_command)
         self.assertIn("command", err.exception.args[0].lower())
+
+    def test_valid_from_text(self):
+        msg = SocketMessage.from_text("{uid1}:{uid2}:{cmd}".format(uid1=self.good_uid1, uid2=self.good_uid2, cmd="JOIN"))
+        self.assertEqual(msg.sender, self.good_uid1)
+        self.assertEqual(msg.recipient, self.good_uid2)
+        self.assertEqual(msg.command, "JOIN")
+
+    def test_invalid_from_text_bad_sender(self):
+        with self.assertRaises(SocketMessageException) as err:
+            msg = SocketMessage.from_text("{uid1}:{uid2}:{cmd}".format(uid1=self.bad_uid, uid2=self.good_uid2, cmd="JOIN"))
+        self.assertIn("sender", err.exception.args[0].lower())

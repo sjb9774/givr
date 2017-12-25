@@ -2,7 +2,7 @@ import re
 from givr.user import User
 from givr.exceptions import SocketMessageException
 class SocketMessage:
-    MSG_REGEX = re.compile(r"(\w+):([\w\d\-]+):(\w+)")
+    MSG_REGEX = re.compile(r"([\w\d-]+):([\w\d\-]+):(\w+)")
     UUID_REGEX = re.compile(r"[\w\d]{8}-[\w\d]{4}-[\w\d]{4}-[\w\d]{4}-[\w\d]{12}")
 
     def __init__(self, sender=None, recipient=None, command=None):
@@ -25,17 +25,14 @@ class SocketMessage:
 
     @classmethod
     def from_text(cls, text):
-        msg = cls()
-        msg._raw = text
-        matches = msg.MSG_REGEX.findall(text)
+        matches = cls.MSG_REGEX.findall(text)
         if matches:
             sender, recipient, command = matches[0]
         else:
             raise SocketMessageException("Message text '{msg}' invalid".format(msg=text))
 
-        msg.sender = sender
-        msg.recipient = recipient
-        msg.command = command
+        msg = cls(sender=sender, recipient=recipient, command=command)
+        msg._raw = text
         return msg
 
 class SocketCommandMetaClass(type):
