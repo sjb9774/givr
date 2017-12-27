@@ -76,7 +76,7 @@ class TestSocketRoom(unittest.TestCase):
         msg = "{uid1}:{uid2}:JOIN".format(uid1=test_id, uid2=test_id2)
         self.room.open()
         resp = self.room.handle_message(Mock("mock connection"), msg)
-        self.assertTrue(resp.endswith("SUCCESS"))
+        self.assertTrue(str(resp).endswith("SUCCESS"))
         self.assertEqual(test_id2, self.room.users[0].user_id)
 
     def test_handle_leave_message(self):
@@ -85,5 +85,5 @@ class TestSocketRoom(unittest.TestCase):
         self.room.users = [u, User(), User(), User()]
         msg = "{uid1}:{uid2}:LEAVE".format(uid1=self.room.room_id, uid2=u.user_id)
         resp = self.room.handle_message(Mock("mock connection"), msg)
-        self.assertTrue(resp.endswith("SUCCESS"))
+        self.assertTrue(str(resp).endswith("SUCCESS"))
         self.assertNotIn(u, self.room.users)

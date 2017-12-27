@@ -1,6 +1,6 @@
 from givr.exceptions import RoomException
 from givr.user import User
-from givr.socketmessage import SocketMessage, SocketCommand
+from givr.socketmessage import SocketMessage
 import uuid
 
 class Room:
@@ -63,13 +63,19 @@ class SocketRoom(Room):
 
     def handle_message(self, connection, data):
         msg = SocketMessage.from_text(data)
-        user = User.from_user_id(msg.recipient)
         try:
-            if msg.command == SocketCommand.JOIN:
-                self.add_user(user)
-            elif msg.command == SocketCommand.LEAVE:
-                self.remove_user(user)
-            return "{room_id}:SUCCESS".format(room_id=self.room_id)
+            handler = getattr(self, "_handle_{cmd}".format(cmd=msg.message.lower()))
+            handler(msg)
+            return SocketMessage(recipient=msg.sender, sender=self.room_id, message=SocketMessage.SUCCESS)
         except BaseException as err:
             print(err)
-            return "{room_id}:FAIL".format(room_id=self.room_id)
+            return SocketMessage(recipient=msg.sender, sender=self.room_id, message=SocketMessage.SUCCESS)
+
+    def _handle_join(self, msg):
+        user = User.from_user_id(msg.recipient)
+        self.add_user(user)
+
+    def _handle_leave(self, msg):
+        user = User.from_user_id(msg.recipient)
+        self.remove_user(user)
+
