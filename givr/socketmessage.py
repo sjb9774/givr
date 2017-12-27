@@ -1,6 +1,8 @@
 import re
 from givr.user import User
 from givr.exceptions import SocketMessageException
+
+
 class SocketMessage:
     MSG_REGEX = re.compile(r"([\w\d-]+):([\w\d\-]+):(\w+)")
     UUID_REGEX = re.compile(r"[\w\d]{8}-[\w\d]{4}-[\w\d]{4}-[\w\d]{4}-[\w\d]{12}")
