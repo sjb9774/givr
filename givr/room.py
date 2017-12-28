@@ -11,6 +11,7 @@ class Room:
         self.room_id = str(uuid.uuid1())
         self._open = False
         self.users = []
+        self.owner = None
 
     def open(self):
         self._open = True
@@ -65,17 +66,17 @@ class SocketRoom(Room):
     def handle_message(self, connection, data):
         msg = SocketMessage.from_text(data)
         failed = False
-        
-        if msg.recipient != self.room_id:
-            failed = True
-            fail_msg = "Message not intended for this room"
+
         try:
             handler = getattr(self, "_handle_{msg}".format(msg=msg.message.lower()))
             resp = handler(msg)
             return resp
         except GivrException as err:
             failed = True
-            fail_msg = str(err)
+            fail_msg = "{err_type}: '{err_msg}'".format(err_type=err.__class__.__name__, err_msg=err.args[0])
+        except BaseException as err:
+            failed = True
+            fail_msg = "{err_type}: '{err_msg}'".format(err_type=err.__class__.__name__, err_msg=err.args[0])
         finally:
             if failed:
                 return SocketMessage(recipient=msg.sender,
@@ -83,16 +84,31 @@ class SocketRoom(Room):
                                      message=SocketMessage.FAILURE,
                                      info=fail_msg)
 
+
+    def check_recipient(fn):
+        def wrapped_fn(self, msg):
+            if msg.recipient != self.room_id:
+                return SocketMessage(recipient=msg.sender,
+                                     sender=self.room_id,
+                                     message=SocketMessage.FAILURE,
+                                     info="Message not intended for this room")
+            else:
+                return fn(self, msg)
+        return wrapped_fn
+
+    @check_recipient
     def _handle_join(self, msg):
         user = User.from_user_id(msg.sender)
         self.add_user(user)
         return SocketMessage(recipient=msg.sender, sender=self.room_id, message=SocketMessage.SUCCESS)
 
+    @check_recipient
     def _handle_leave(self, msg):
         user = User.from_user_id(msg.sender)
         self.remove_user(user)
         return SocketMessage(recipient=msg.sender, sender=self.room_id, message=SocketMessage.SUCCESS)
 
+    @check_recipient
     def _handle_giveaway(self, msg):
         sender = User.from_user_id(msg.sender)
         if sender != self.owner:
@@ -102,5 +118,5 @@ class SocketRoom(Room):
             winner = g.draw(1)[-1]
             return SocketMessage(sender=self.room_id,
                                  recipient=sender.user_id,
-                                 message=SocketMessage.WINNER,
+                                 message=SocketMessage.SUCCESS,
                                  info=winner.user_id)

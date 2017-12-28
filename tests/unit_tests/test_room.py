@@ -2,6 +2,7 @@ import unittest
 from givr.room import Room, SocketRoom
 from givr.user import User
 from givr.exceptions import RoomException
+from givr.socketmessage import SocketMessage
 from unittest.mock import Mock
 
 class TestRoom(unittest.TestCase):
@@ -106,11 +107,32 @@ class TestSocketRoom(unittest.TestCase):
         msg = "{uid1}:{uid2}:GIVEAWAY".format(uid1=user.user_id, uid2=self.room.room_id)
         resp = self.room.handle_message(Mock("mock connection"), msg)
         self.assertEqual(resp.message, "FAILURE")
+        self.assertIn("initiated by the room owner", resp.info)
 
     def test_handle_bad_recipient(self):
         u = User()
-        msg = "{uid1}:{uid2}:JOIN".format(uid1=str(uuid.uuid1()), uid2=u.user_id)
-        resp = self.room.handle_message(Mock("mock connection"), msg)
-        self.assertEqual(resp.message, "FAILURE")
+        self.room.open()
+        for message in ("JOIN", "LEAVE", "GIVEAWAY"):
+            with self.subTest(message=message):
+                msg = "{uid1}:{uid2}:{m}".format(uid1=str(uuid.uuid1()), uid2=u.user_id, m=message)
+                resp = self.room.handle_message(Mock("mock connection"), msg)
+                self.assertEqual(resp.message, "FAILURE")
+                self.assertIn("not intended for this room", resp.info)
 
+    def test_handlers(self):
+        for handler in ("giveaway", "join", "leave"):
+            with self.subTest(handler=handler):
+                fn = getattr(self.room, "_handle_{handler}".format(handler=handler))
+                u = User()
+                self.room.open()
+                self.room.add_owner(u)
+                msg = SocketMessage(sender=u.user_id, recipient=self.room.room_id, message=handler.upper())
+                resp = fn(msg)
+                self.assertEqual(resp.message, SocketMessage.SUCCESS)
 
+    def test__handle_giveaway_non_owner(self):
+        u = User()
+        msg = SocketMessage(sender=u.user_id, recipient=self.room.room_id, message=SocketMessage.GIVEAWAY)
+        with self.assertRaises(RoomException) as err:
+            self.room._handle_giveaway(msg)
+            self.assertIn("room owner", err.args[0])

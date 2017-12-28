@@ -22,7 +22,7 @@ class SocketMessageMetaClass(type):
 
 
 class SocketMessage(metaclass=SocketMessageMetaClass):
-    MSG_REGEX = re.compile(r"([\w\d-]+):([\w\d\-]+):(\w+)(?:\:([\w\d\-\s]+))?")
+    MSG_REGEX = re.compile(r"([\w\d-]+):([\w\d\-]+):(\w+)(?:\:(.+))?")
     UUID_REGEX = re.compile(r"[\w\d]{8}-[\w\d]{4}-[\w\d]{4}-[\w\d]{4}-[\w\d]{12}")
 
     def __init__(self, sender=None, recipient=None, message=None, info=None):
