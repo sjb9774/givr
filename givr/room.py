@@ -64,7 +64,7 @@ class SocketRoom(Room):
     def handle_message(self, connection, data):
         msg = SocketMessage.from_text(data)
         try:
-            handler = getattr(self, "_handle_{cmd}".format(cmd=msg.message.lower()))
+            handler = getattr(self, "_handle_{msg}".format(msg=msg.message.lower()))
             handler(msg)
             return SocketMessage(recipient=msg.sender, sender=self.room_id, message=SocketMessage.SUCCESS)
         except BaseException as err:

@@ -10,7 +10,7 @@ class TestSocketMessage(unittest.TestCase):
         self.good_uid1 = str(uuid.uuid1())
         self.good_uid2 = str(uuid.uuid1())
         self.bad_uid = "BAD_UID"
-        self.bad_message = "BAD COMMAND"
+        self.bad_message = "BAD MESSAGE"
 
     def test_valid_message(self):
         msg = SocketMessage(sender=self.good_uid1, recipient=self.good_uid2, message=SocketMessage.JOIN)
@@ -32,24 +32,24 @@ class TestSocketMessage(unittest.TestCase):
         self.assertIn("message", err.exception.args[0].lower())
 
     def test_valid_from_text(self):
-        msg = SocketMessage.from_text("{uid1}:{uid2}:{cmd}".format(uid1=self.good_uid1, uid2=self.good_uid2, cmd="JOIN"))
+        msg = SocketMessage.from_text("{uid1}:{uid2}:{msg}".format(uid1=self.good_uid1, uid2=self.good_uid2, msg="JOIN"))
         self.assertEqual(msg.sender, self.good_uid1)
         self.assertEqual(msg.recipient, self.good_uid2)
         self.assertEqual(msg.message, "JOIN")
 
     def test_invalid_from_text_bad_sender(self):
         with self.assertRaises(SocketMessageException) as err:
-            msg = SocketMessage.from_text("{uid1}:{uid2}:{cmd}".format(uid1=self.bad_uid, uid2=self.good_uid1, cmd="JOIN"))
+            msg = SocketMessage.from_text("{uid1}:{uid2}:{msg}".format(uid1=self.bad_uid, uid2=self.good_uid1, msg="JOIN"))
         self.assertIn("sender", err.exception.args[0].lower())
 
     def test_invalid_from_text_bad_recipient(self):
         with self.assertRaises(SocketMessageException) as err:
-            msg = SocketMessage.from_text("{uid1}:{uid2}:{cmd}".format(uid1=self.good_uid1, uid2=self.bad_uid, cmd="JOIN"))
+            msg = SocketMessage.from_text("{uid1}:{uid2}:{msg}".format(uid1=self.good_uid1, uid2=self.bad_uid, msg="JOIN"))
         self.assertIn("recipient", err.exception.args[0].lower())
 
     def test_invalid_from_text_bad_message(self):
         with self.assertRaises(SocketMessageException) as err:
-            msg = SocketMessage.from_text("{uid1}:{uid2}:{cmd}".format(uid1=self.good_uid1, uid2=self.good_uid2, cmd=self.bad_message))
+            msg = SocketMessage.from_text("{uid1}:{uid2}:{msg}".format(uid1=self.good_uid1, uid2=self.good_uid2, msg=self.bad_message))
         self.assertIn("message", err.exception.args[0].lower())
 
     def test_all_messages_exist(self):
