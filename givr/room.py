@@ -1,6 +1,7 @@
-from givr.exceptions import RoomException
+from givr.exceptions import RoomException, GivrException
 from givr.user import User
 from givr.socketmessage import SocketMessage
+from givr.giveaway import Giveaway
 import uuid
 
 class Room:
@@ -63,21 +64,43 @@ class SocketRoom(Room):
 
     def handle_message(self, connection, data):
         msg = SocketMessage.from_text(data)
+        failed = False
+        
         if msg.recipient != self.room_id:
-            raise RoomException("Message not intended for this room")
+            failed = True
+            fail_msg = "Message not intended for this room"
         try:
             handler = getattr(self, "_handle_{msg}".format(msg=msg.message.lower()))
-            handler(msg)
-            return SocketMessage(recipient=msg.sender, sender=self.room_id, message=SocketMessage.SUCCESS)
-        except BaseException as err:
-            print(err)
-            return SocketMessage(recipient=msg.sender, sender=self.room_id, message=SocketMessage.SUCCESS)
+            resp = handler(msg)
+            return resp
+        except GivrException as err:
+            failed = True
+            fail_msg = str(err)
+        finally:
+            if failed:
+                return SocketMessage(recipient=msg.sender,
+                                     sender=self.room_id,
+                                     message=SocketMessage.FAILURE,
+                                     info=fail_msg)
 
     def _handle_join(self, msg):
         user = User.from_user_id(msg.sender)
         self.add_user(user)
+        return SocketMessage(recipient=msg.sender, sender=self.room_id, message=SocketMessage.SUCCESS)
 
     def _handle_leave(self, msg):
         user = User.from_user_id(msg.sender)
         self.remove_user(user)
+        return SocketMessage(recipient=msg.sender, sender=self.room_id, message=SocketMessage.SUCCESS)
 
+    def _handle_giveaway(self, msg):
+        sender = User.from_user_id(msg.sender)
+        if sender != self.owner:
+            raise RoomException("Giveaways can only be initiated by the room owner")
+        else:
+            g = Giveaway(users=self.users)
+            winner = g.draw(1)[-1]
+            return SocketMessage(sender=self.room_id,
+                                 recipient=sender.user_id,
+                                 message=SocketMessage.WINNER,
+                                 info=winner.user_id)

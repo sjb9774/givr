@@ -9,7 +9,10 @@ class SocketMessageMetaClass(type):
         "JOIN": "JOIN",
         "ENTER": "ENTER",
         "LEAVE": "LEAVE",
-        "SUCCESS": "SUCCESS"
+        "SUCCESS": "SUCCESS",
+        "WINNER": "WINNER",
+        "GIVEAWAY": "GIVEAWAY",
+        "FAILURE": "FAILURE"
     }
 
     def __init__(self, name, bases, namespace):
@@ -19,10 +22,10 @@ class SocketMessageMetaClass(type):
 
 
 class SocketMessage(metaclass=SocketMessageMetaClass):
-    MSG_REGEX = re.compile(r"([\w\d-]+):([\w\d\-]+):(\w+)")
+    MSG_REGEX = re.compile(r"([\w\d-]+):([\w\d\-]+):(\w+)(?:\:([\w\d\-\s]+))?")
     UUID_REGEX = re.compile(r"[\w\d]{8}-[\w\d]{4}-[\w\d]{4}-[\w\d]{4}-[\w\d]{12}")
 
-    def __init__(self, sender=None, recipient=None, message=None):
+    def __init__(self, sender=None, recipient=None, message=None, info=None):
         if sender and not self.UUID_REGEX.findall(sender):
             raise SocketMessageException("Sender UUID '{uid}' invalid".format(uid=sender))
         if recipient and not self.UUID_REGEX.findall(recipient):
@@ -32,6 +35,7 @@ class SocketMessage(metaclass=SocketMessageMetaClass):
         self.sender = sender
         self.recipient = recipient
         self.message = message
+        self.info = info
 
     def __str__(self):
         return "{sender}:{recipient}:{msg}".format(sender=self.sender,
@@ -44,10 +48,10 @@ class SocketMessage(metaclass=SocketMessageMetaClass):
     def from_text(cls, text):
         matches = cls.MSG_REGEX.findall(text)
         if matches:
-            sender, recipient, msg = matches[0]
+            sender, recipient, msg, info = matches[0]
         else:
             raise SocketMessageException("Message test '{msg}' invalid".format(msg=text))
 
-        smsg = cls(sender=sender, recipient=recipient, message=msg)
+        smsg = cls(sender=sender, recipient=recipient, message=msg, info=info)
         smsg._raw = text
         return smsg

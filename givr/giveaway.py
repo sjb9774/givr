@@ -2,7 +2,7 @@ import random
 
 class Giveaway:
 
-    def __init__(self, users):
+    def __init__(self, users=None):
         self.users = users
 
     def draw(self, n):

@@ -1,5 +1,8 @@
-class RoomException(BaseException):
+class GivrException(BaseException):
     pass
 
-class SocketMessageException(BaseException):
+class RoomException(GivrException):
+    pass
+
+class SocketMessageException(GivrException):
     pass

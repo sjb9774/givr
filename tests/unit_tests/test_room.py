@@ -64,33 +64,53 @@ class TestRoom(unittest.TestCase):
         with self.assertRaises(RoomException):
             r.add_user(u)
 
+
 import uuid
 class TestSocketRoom(unittest.TestCase):
 
     def setUp(self):
         self.room = SocketRoom()
 
-    def test_handle_join_message(self):
+    def test_handle_message_join(self):
         test_id = str(uuid.uuid1())
         msg = "{uid1}:{uid2}:JOIN".format(uid1=test_id, uid2=self.room.room_id)
         self.room.open()
         resp = self.room.handle_message(Mock("mock connection"), msg)
-        self.assertTrue(str(resp).endswith("SUCCESS"))
+        self.assertTrue(resp.to_text().endswith("SUCCESS"))
         self.assertEqual(test_id, self.room.users[0].user_id)
 
-    def test_handle_leave_message(self):
+    def test_handle_message_leave(self):
         self.room.open()
         u = User()
         self.room.users = [u, User(), User(), User()]
         msg = "{uid1}:{uid2}:LEAVE".format(uid1=u.user_id, uid2=self.room.room_id)
         resp = self.room.handle_message(Mock("mock connection"), msg)
-        self.assertTrue(str(resp).endswith("SUCCESS"))
+        self.assertTrue(resp.to_text().endswith("SUCCESS"))
         self.assertNotIn(u, self.room.users)
+
+    def test_handle_message_giveaway(self):
+        self.room.open()
+        owner = User()
+        self.room.add_owner(owner)
+        msg = "{uid1}:{uid2}:GIVEAWAY".format(uid1=owner.user_id, uid2=self.room.room_id)
+        resp = self.room.handle_message(Mock("mock connection"), msg)
+        self.assertEqual(resp.info, owner.user_id)
+        self.assertTrue(resp.message, "SUCCESS")
+
+    def test_handle_message_giveaway_non_owner(self):
+        self.room.open()
+        owner = User()
+        self.room.add_owner(owner)
+        user = User()
+        self.room.add_user(user)
+        msg = "{uid1}:{uid2}:GIVEAWAY".format(uid1=user.user_id, uid2=self.room.room_id)
+        resp = self.room.handle_message(Mock("mock connection"), msg)
+        self.assertEqual(resp.message, "FAILURE")
 
     def test_handle_bad_recipient(self):
         u = User()
         msg = "{uid1}:{uid2}:JOIN".format(uid1=str(uuid.uuid1()), uid2=u.user_id)
-        with self.assertRaises(RoomException):
-            resp = self.room.handle_message(Mock("mock connection"), msg)
+        resp = self.room.handle_message(Mock("mock connection"), msg)
+        self.assertEqual(resp.message, "FAILURE")
 
 
