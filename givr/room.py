@@ -63,6 +63,8 @@ class SocketRoom(Room):
 
     def handle_message(self, connection, data):
         msg = SocketMessage.from_text(data)
+        if msg.recipient != self.room_id:
+            raise RoomException("Message not intended for this room")
         try:
             handler = getattr(self, "_handle_{msg}".format(msg=msg.message.lower()))
             handler(msg)
@@ -72,10 +74,10 @@ class SocketRoom(Room):
             return SocketMessage(recipient=msg.sender, sender=self.room_id, message=SocketMessage.SUCCESS)
 
     def _handle_join(self, msg):
-        user = User.from_user_id(msg.recipient)
+        user = User.from_user_id(msg.sender)
         self.add_user(user)
 
     def _handle_leave(self, msg):
-        user = User.from_user_id(msg.recipient)
+        user = User.from_user_id(msg.sender)
         self.remove_user(user)
 
