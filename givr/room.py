@@ -49,14 +49,19 @@ class Room:
         self.users = [u for u in self.users if user.user_id != u.user_id]
 
 
-import socket, select, re, threading
+import socket, select, re, threading, base64, hashlib
 
 class SocketRoom(Room):
+
+    def __init__(self, address=('127.0.0.1', 9000)):
+        super(SocketRoom, self).__init__()
+        self.address = address
+        self.listening = False
 
     def _create_socket(self):
         logger.debug("Creating socket")
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.socket.bind(('127.0.0.1', 9000))
+        self.socket.bind(self.address)
 
     def dlisten(self):
         t = threading.Thread(target=self.listen)
@@ -69,7 +74,9 @@ class SocketRoom(Room):
         self.socket.listen(100)
         self.open()
         connections = []
-        while True:
+
+        self.listening = True
+        while self.listening:
             conn, _, _ = select.select([self.socket], [], [], .1)
             for c in conn:
                 connections.append(self.socket.accept())
@@ -78,15 +85,23 @@ class SocketRoom(Room):
             for connection in connections:
                 try:
                     data = connection[0].recv(1024)
-                    response = self.handle_message(connection, data)
-                    if response:
-                        connection[0].sendall(response)
+                    if data:
+                        response = self.handle_message(connection, data)
+                        if response:
+                            connection[0].sendall(response.encode())
                 except socket.error as err:
                     logger.warning("Socket error '{err}'".format(err=err))
                     connections.remove(connection)
+        logger.debug("Room '{r}' done listening".format(r=self.room_id))
+        self.socket.close()
+        [c.close() for c in connections]
+
+    def stop_listening(self):
+        logger.debug("Stopping listening for room '{r}'".format(r=self.room_id))
+        self.listening = False
 
     def handle_message(self, connection, data):
-        data = str(data)
+        data = data.decode() if type(data) == bytes else data
         logger.debug("SocketRoom '{r}' recieved data '{m}'".format(r=self.room_id, m=data))
         msg = SocketMessage.from_text(data)
         failed = False
@@ -149,3 +164,40 @@ class SocketRoom(Room):
                                  recipient=sender.user_id,
                                  message=SocketMessage.SUCCESS,
                                  info=winner.user_id)
+
+
+class WebSocketRoom(SocketRoom):
+
+    WEBSOCKET_MAGIC = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+
+    def __init__(self, address=('127.0.0.1', 9000)):
+        super(WebSocketRoom, self).__init__(address=address)
+        self.handshook = False
+
+    def handle_message(self, conn, data):
+        if not self.handshook:
+            self.handshook = True
+            return self.handle_websocket_handshake(data.decode())
+        else:
+            import pudb; pudb.set_trace()
+
+    def handle_websocket_request(self, data):
+        pass
+
+    def _get_websocket_accept(self, key):
+        return base64.b64encode(hashlib.sha1((key + self.WEBSOCKET_MAGIC).encode()).digest()).decode()
+
+    def handle_websocket_handshake(self, data):
+        split_data = data.split("\r\n")
+        method, path, http = split_data[0].split(" ")
+        headers = {}
+        for header in split_data[1:]:
+            if ": " in header:
+                key, value = header.split(": ")
+                headers[key] = value
+        accept = self._get_websocket_accept(headers.get("Sec-WebSocket-Key"))
+        response = "".join(["HTTP/1.1 101 Switching Protocols\r\n",
+                            "Upgrade: websocket\r\n",
+                            "Connection: Upgrade\r\n",
+                            "Sec-WebSocket-Accept: {accept}\r\n\r\n".format(accept=accept)])
+        return response
