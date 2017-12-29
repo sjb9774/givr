@@ -48,7 +48,8 @@ class Room:
         logger.debug("Removing user '{u}' from room {r}".format(u=user.user_id, r=self.room_id))
         self.users = [u for u in self.users if user.user_id != u.user_id]
 
-import socket, select, re
+
+import socket, select, re, threading
 
 class SocketRoom(Room):
 
@@ -56,6 +57,11 @@ class SocketRoom(Room):
         logger.debug("Creating socket")
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.bind(('127.0.0.1', 9000))
+
+    def dlisten(self):
+        t = threading.Thread(target=self.listen)
+        t.start()
+        return t
 
     def listen(self):
         self._create_socket()
@@ -80,6 +86,7 @@ class SocketRoom(Room):
                     connections.remove(connection)
 
     def handle_message(self, connection, data):
+        data = str(data)
         logger.debug("SocketRoom '{r}' recieved data '{m}'".format(r=self.room_id, m=data))
         msg = SocketMessage.from_text(data)
         failed = False
