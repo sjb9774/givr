@@ -22,8 +22,25 @@ class WebSocketFrame:
     def __init__(self, data):
         self._raw_data = data
         self._complete_bit_str = "".join([bits(byte) for byte in data])
-        self.parse_data()
+        self.parse_bits(self._complete_bit_str)
 
-    def parse_data(self):
+    def parse_bits(self, data):
+        bit_gen = (x for x in data)
+        get_next_bits = lambda x: "".join([next(bit_gen) for i in range(x)])
+
         #   First find the payload length
+        first_9 = get_next_bits(9)
+        bits_9_15_val = bits_value(get_next_bits(7))
+        if bits_9_15_val <= 125:
+            self.payload_length = bits_9_15_val
+        elif bits_9_15_val == 126:
+            self.payload_length = bits_value(get_next_bits(16))
+        elif bits_9_15_val == 127:
+            self.payload_length = bits_value(get_next_bits(64))
 
+        self.mask = get_next_bits(32)
+        self.message = ""
+        for x in range(self.payload_length):
+            char_data = get_next_bits(8)
+            char = chr(bits_value(char_data) ^ bits_value(self.mask[(x % 4) * 8:((x % 4) * 8) + 8]))
+            self.message += char

@@ -1,9 +1,9 @@
-import logging, sys
+import logging, sys, os
 
 def get_logger(name):
     ch = logging.StreamHandler(sys.stdout)
     ch.setLevel(logging.DEBUG)
-    fh = logging.FileHandler("logs/debug.log")
+    fh = logging.FileHandler(os.path.join("logs", "debug.log"))
     fh.setLevel(logging.DEBUG)
     formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - (%(funcName)s): %(message)s")
     ch.setFormatter(formatter)

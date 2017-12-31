@@ -3,6 +3,7 @@ from givr.user import User
 from givr.socketmessage import SocketMessage
 from givr.giveaway import Giveaway
 from givr.logging import get_logger
+from givr.websocket import WebSocketFrame
 import uuid
 import functools
 
@@ -179,7 +180,8 @@ class WebSocketRoom(SocketRoom):
             self.handshook = True
             return self.handle_websocket_handshake(data.decode())
         else:
-            import pudb; pudb.set_trace()
+            frame = WebSocketFrame(data)
+            print(frame.message)
 
     def handle_websocket_request(self, data):
         pass
