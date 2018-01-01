@@ -44,3 +44,4 @@ class WebSocketFrame:
             char_data = get_next_bits(8)
             char = chr(bits_value(char_data) ^ bits_value(self.mask[(x % 4) * 8:((x % 4) * 8) + 8]))
             self.message += char
+        

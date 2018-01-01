@@ -1,6 +1,7 @@
 import re
 from givr.user import User
 from givr.exceptions import SocketMessageException
+from givr.websocket import WebSocketFrame
 from givr.logging import get_logger
 
 logger = get_logger(__name__)
@@ -58,7 +59,7 @@ class SocketMessage(metaclass=SocketMessageMetaClass):
         if matches:
             sender, recipient, msg, info = matches[0]
         else:
-            raise SocketMessageException("Message test '{msg}' invalid".format(msg=text))
+            raise SocketMessageException("Message text '{msg}' invalid".format(msg=text))
 
         smsg = cls(sender=sender, recipient=recipient, message=msg, info=info)
         smsg._raw = text
@@ -69,42 +70,5 @@ class WebSocketMessage(SocketMessage):
 
     @classmethod
     def from_text(cls, data):
-        parsed
-
-    @classmethod
-    def get_payload_length(cls, data):
-        complete_bit_str = "".join([WebSocketMessage.bits(byte) for byte in data])
-        # payload length is determined in bits 9-15 inclusive
-        bits9_15_value = WebSocketMessage.bits_value(complete_bit_str[9:16])
-        if bits9_15_value <= 125:
-            return bits9_15_value
-        # if the valus is 126 then we need to read the next 16 bits for the length
-        elif bits9_15_value == 126:
-            return WebSocketMessage.bits_value(complete_bit_str[16:33])
-        # if the value is 127 then we need to read the next 64 bits for the length
-        elif bits9_15_value == 127:
-            return WebSocketMessage.bits_value(complete_bit_str[16:81])
-        else:
-            raise SocketMessageException("WebSocket payload data malformed")
-
-    @staticmethod
-    def bits(byte, p=7):
-        if byte > 255:
-            raise ValueError("Bytes can't be greater than 255")
-        result = '1' if byte >= (2**p) else '0'
-        if result == '0' and p > 0:
-            result += WebSocketMessage.bits(byte, p-1)
-        elif p > 0:
-            leftover = byte - 2**p
-            result += WebSocketMessage.bits(leftover, p-1)
-        return result
-
-    @staticmethod
-    def bits_value(bits):
-        p = len(bits) - 1
-        total = 0
-        for i, bit in enumerate(bits):
-            total += int(bit) * (2**(p-i))
-        return total
-
-
+        frame = WebSocketFrame(data)
+        return super(WebSocketMessage, cls).from_text(frame.message)

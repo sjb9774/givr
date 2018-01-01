@@ -1,5 +1,5 @@
 import unittest
-from givr.room import Room, SocketRoom
+from givr.room import Room, SocketRoom, WebSocketRoom
 from givr.user import User
 from givr.exceptions import RoomException
 from givr.socketmessage import SocketMessage
@@ -136,3 +136,22 @@ class TestSocketRoom(unittest.TestCase):
         with self.assertRaises(RoomException) as err:
             self.room._handle_giveaway(msg)
             self.assertIn("room owner", err.args[0])
+
+
+class TestWebSocketRoom(unittest.TestCase):
+
+    def setUp(self):
+        self.room = WebSocketRoom()
+
+    def test_handle_handshake(self):
+        client_handshake = "GET / HTTP/1.1\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
+        handshake_response = self.room.handle_websocket_handshake(client_handshake).split("\r\n")
+        self.assertEqual(handshake_response[0], "HTTP/1.1 101 Switching Protocols")
+        headers = {k: v for k,v in [header.split(": ") for header in handshake_response[1:4]]}
+        self.assertEqual(headers.get("Upgrade"), "websocket")
+        self.assertEqual(headers.get("Connection"), "Upgrade")
+        self.assertEqual(headers.get("Sec-WebSocket-Accept"), "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=")
+
+    def test_handle_message(self):
+        self.room.handshook = True # assume the handshake succeeded, it's tested above
+        

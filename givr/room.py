@@ -1,6 +1,6 @@
 from givr.exceptions import RoomException, GivrException
 from givr.user import User
-from givr.socketmessage import SocketMessage
+from givr.socketmessage import SocketMessage, WebSocketMessage
 from givr.giveaway import Giveaway
 from givr.logging import get_logger
 from givr.websocket import WebSocketFrame
@@ -101,15 +101,11 @@ class SocketRoom(Room):
         logger.debug("Stopping listening for room '{r}'".format(r=self.room_id))
         self.listening = False
 
-    def handle_message(self, connection, data):
-        data = data.decode() if type(data) == bytes else data
-        logger.debug("SocketRoom '{r}' recieved data '{m}'".format(r=self.room_id, m=data))
-        msg = SocketMessage.from_text(data)
+    def delegate_command(self, msg):
         failed = False
-
         try:
             handler = getattr(self, "_handle_{msg}".format(msg=msg.message.lower()))
-            resp = handler(msg)
+            resp = handler(msg).to_text()
             return resp
         except GivrException as err:
             logger.warn("A handled application error has occurred: {err}".format(err=err))
@@ -124,8 +120,13 @@ class SocketRoom(Room):
                 return SocketMessage(recipient=msg.sender,
                                      sender=self.room_id,
                                      message=SocketMessage.FAILURE,
-                                     info=fail_msg)
+                                     info=fail_msg).to_text()
 
+    def handle_message(self, connection, data):
+        data = data.decode() if type(data) == bytes else data
+        logger.debug("SocketRoom '{r}' recieved data '{m}'".format(r=self.room_id, m=data))
+        msg = SocketMessage.from_text(data)
+        return self.delegate_command(msg)
 
     def check_recipient(fn):
         @functools.wraps(fn)
@@ -180,11 +181,8 @@ class WebSocketRoom(SocketRoom):
             self.handshook = True
             return self.handle_websocket_handshake(data.decode())
         else:
-            frame = WebSocketFrame(data)
-            print(frame.message)
-
-    def handle_websocket_request(self, data):
-        pass
+            msg = WebSocketMessage.from_text(data)
+            return self.delegate_command(msg)
 
     def _get_websocket_accept(self, key):
         return base64.b64encode(hashlib.sha1((key + self.WEBSOCKET_MAGIC).encode()).digest()).decode()
