@@ -85,11 +85,9 @@ class SocketRoom(Room):
 
             for connection in connections:
                 try:
-                    data = connection[0].recv(4096)
-                    if data:
-                        response = self.handle_message(connection, data)
-                        if response:
-                            connection[0].sendall(response.encode())
+                    response = self.connection_handler(connection[0])
+                    if response:
+                        connection[0].sendall(response.encode())
                 except socket.error as err:
                     logger.warning("Socket error '{err}'".format(err=err))
                     connections.remove(connection)
@@ -97,9 +95,19 @@ class SocketRoom(Room):
         self.socket.close()
         [c.close() for c in connections]
 
-    def stop_listening(self):
-        logger.debug("Stopping listening for room '{r}'".format(r=self.room_id))
-        self.listening = False
+    def connection_handler(self, connection):
+        data = connection.recv(4096)
+        if data:
+            response = self.handle_message(connection, data)
+            return response
+        else:
+            return None
+
+    def handle_message(self, connection, data):
+        data = data.decode() if type(data) == bytes else data
+        logger.debug("SocketRoom '{r}' recieved data '{m}'".format(r=self.room_id, m=data))
+        msg = SocketMessage.from_text(data)
+        return self.delegate_command(msg).to_text()
 
     def delegate_command(self, msg):
         failed = False
@@ -122,11 +130,9 @@ class SocketRoom(Room):
                                      message=SocketMessage.FAILURE,
                                      info=fail_msg)
 
-    def handle_message(self, connection, data):
-        data = data.decode() if type(data) == bytes else data
-        logger.debug("SocketRoom '{r}' recieved data '{m}'".format(r=self.room_id, m=data))
-        msg = SocketMessage.from_text(data)
-        return self.delegate_command(msg).to_text()
+    def stop_listening(self):
+        logger.debug("Stopping listening for room '{r}'".format(r=self.room_id))
+        self.listening = False
 
     def check_recipient(fn):
         @functools.wraps(fn)
@@ -176,14 +182,30 @@ class WebSocketRoom(SocketRoom):
         super(WebSocketRoom, self).__init__(address=address)
         self.handshook = False
 
+
+    def connection_handler(self, conn):
+        if not self.handshook:
+            resp = self.handle_websocket_handshake(conn.recv(1024).decode())
+            self.handshook = True
+        else:
+            import pudb; pudb.set_trace()
+            f = WebSocketFrame.read_from_socket(conn)
+            resp = f.message
+        return resp
+
+
     def handle_message(self, conn, data):
         logger.debug("WebSocket data: {d}".format(d=data))
         if not self.handshook:
             self.handshook = True
             return self.handle_websocket_handshake(data.decode())
         else:
-            msg = WebSocketMessage.from_text(data)
-            return self.delegate_command(msg).to_text()
+            try:
+                msg = WebSocketMessage.from_text(data)
+                return self.delegate_command(msg).to_text()
+            except GivrException as err:
+                return SocketMessage(sender=self.room_id, recipient=self.room_id, message=SocketMessage.FAILURE).to_text()
+
 
     def _get_websocket_accept(self, key):
         return base64.b64encode(hashlib.sha1((key + self.WEBSOCKET_MAGIC).encode()).digest()).decode()

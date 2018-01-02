@@ -35,5 +35,11 @@ class TestBitsFunctions(unittest.TestCase):
 
 class TestWebSocketFrame(unittest.TestCase):
 
-    def test_webframe_from_data(self):
-        data = b""
+    def test_webframe_from_data_non_fragmented(self):
+        data = b'\x81\x89I\x96k\xa8\x1d\xd38\xfci\xd2*\xfc\x08'
+        f = WebSocketFrame(data)
+        self.assertEqual(f.message, "TEST DATA")
+        self.assertEqual(f.payload_length, 9)
+        self.assertEqual(f.opcode, 1)
+        self.assertEqual(f.mask_flag, 1)
+        self.assertEqual(f.mask, "01001001100101100110101110101000")

@@ -20,20 +20,38 @@ def bits_value(bits):
         total += int(bit) * (2**(p-i))
     return total
 
+def to_binary(n):
+    r = n
+    s = ""
+    while r > 0:
+        s += str(r % 2)
+        r = r // 2
+    return s[-1::-1]
 
+import select
 class WebSocketFrame:
 
-    def __init__(self, data):
+    def __init__(self, data=None):
         self._raw_data = data
-        self._complete_bit_str = "".join([bits(byte) for byte in data])
-        self.parse_bits(self._complete_bit_str)
+        if data:
+            self._complete_bit_str = "".join([bits(byte) for byte in data])
+            bits_gen = (b for b in self._complete_bit_str)
+            self.parse_bits(lambda x: "".join(next(bits_gen) for i in range(x)))
 
-    def parse_bits(self, data):
-        bit_gen = (x for x in data)
-        get_next_bits = lambda x: "".join([next(bit_gen) for i in range(x)])
 
+    @classmethod
+    def read_from_socket(cls, sck):
+        def get_next_bits(x):
+            if select.select([sck], [], []):
+                return "".join((bits(i) for i in sck.recv(x)))
+            else:
+                raise StopIteration("No more bits to read")
+
+    def parse_bits(self, get_next_bits):
         #   First find the payload length
-        first_9 = get_next_bits(9)
+        first_4 = get_next_bits(4)
+        self.opcode = bits_value(get_next_bits(4))
+        self.mask_flag = bits_value(get_next_bits(1))
         bits_9_15_val = bits_value(get_next_bits(7))
         if bits_9_15_val <= 125:
             self.payload_length = bits_9_15_val
