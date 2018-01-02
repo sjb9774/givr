@@ -77,7 +77,7 @@ class TestSocketRoom(unittest.TestCase):
         msg = "{uid1}:{uid2}:JOIN".format(uid1=test_id, uid2=self.room.room_id)
         self.room.open()
         resp = self.room.handle_message(Mock("mock connection"), msg)
-        self.assertTrue(resp.to_text().endswith("SUCCESS"))
+        self.assertTrue(resp.endswith("SUCCESS"))
         self.assertEqual(test_id, self.room.users[0].user_id)
 
     def test_handle_message_leave(self):
@@ -86,7 +86,7 @@ class TestSocketRoom(unittest.TestCase):
         self.room.users = [u, User(), User(), User()]
         msg = "{uid1}:{uid2}:LEAVE".format(uid1=u.user_id, uid2=self.room.room_id)
         resp = self.room.handle_message(Mock("mock connection"), msg)
-        self.assertTrue(resp.to_text().endswith("SUCCESS"))
+        self.assertTrue(resp.endswith("SUCCESS"))
         self.assertNotIn(u, self.room.users)
 
     def test_handle_message_giveaway(self):
@@ -94,7 +94,7 @@ class TestSocketRoom(unittest.TestCase):
         owner = User()
         self.room.add_owner(owner)
         msg = "{uid1}:{uid2}:GIVEAWAY".format(uid1=owner.user_id, uid2=self.room.room_id)
-        resp = self.room.handle_message(Mock("mock connection"), msg)
+        resp = SocketMessage.from_text(self.room.handle_message(Mock("mock connection"), msg))
         self.assertEqual(resp.info, owner.user_id)
         self.assertTrue(resp.message, "SUCCESS")
 
@@ -105,7 +105,7 @@ class TestSocketRoom(unittest.TestCase):
         user = User()
         self.room.add_user(user)
         msg = "{uid1}:{uid2}:GIVEAWAY".format(uid1=user.user_id, uid2=self.room.room_id)
-        resp = self.room.handle_message(Mock("mock connection"), msg)
+        resp = SocketMessage.from_text(self.room.handle_message(Mock("mock connection"), msg))
         self.assertEqual(resp.message, "FAILURE")
         self.assertIn("initiated by the room owner", resp.info)
 
@@ -115,7 +115,7 @@ class TestSocketRoom(unittest.TestCase):
         for message in ("JOIN", "LEAVE", "GIVEAWAY"):
             with self.subTest(message=message):
                 msg = "{uid1}:{uid2}:{m}".format(uid1=str(uuid.uuid1()), uid2=u.user_id, m=message)
-                resp = self.room.handle_message(Mock("mock connection"), msg)
+                resp = SocketMessage.from_text(self.room.handle_message(Mock("mock connection"), msg))
                 self.assertEqual(resp.message, "FAILURE")
                 self.assertIn("not intended for this room", resp.info)
 
@@ -154,4 +154,4 @@ class TestWebSocketRoom(unittest.TestCase):
 
     def test_handle_message(self):
         self.room.handshook = True # assume the handshake succeeded, it's tested above
-        
+        response = self.room.handle_message

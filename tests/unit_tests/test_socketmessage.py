@@ -37,6 +37,12 @@ class TestSocketMessage(unittest.TestCase):
         self.assertEqual(msg.recipient, self.good_uid2)
         self.assertEqual(msg.message, "JOIN")
 
+    def test_from_text_with_info(self):
+        msg = SocketMessage.from_text("{uid1}:{uid2}:SUCCESS:{uid3}".format(uid1=self.good_uid1, uid2=self.good_uid2, uid3=self.good_uid2))
+        self.assertEqual(msg.sender, self.good_uid1)
+        self.assertEqual(msg.recipient, self.good_uid2)
+        self.assertEqual(msg.info, self.good_uid2)
+
     def test_invalid_from_text_bad_sender(self):
         with self.assertRaises(SocketMessageException) as err:
             msg = SocketMessage.from_text("{uid1}:{uid2}:{msg}".format(uid1=self.bad_uid, uid2=self.good_uid1, msg="JOIN"))

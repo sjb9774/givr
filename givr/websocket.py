@@ -1,6 +1,6 @@
 def bits(byte, p=7):
-    if byte > 255:
-        raise ValueError("Bytes can't be greater than 255")
+    if byte > 255 or byte < 0:
+        raise ValueError("Bytes can't be greater than 255 or less than 0")
     result = '1' if byte >= (2**p) else '0'
     if result == '0' and p > 0:
         result += bits(byte, p-1)
@@ -10,9 +10,13 @@ def bits(byte, p=7):
     return result
 
 def bits_value(bits):
+    if type(bits) != str:
+        raise ValueError("Input should be a bit string")
     p = len(bits) - 1
     total = 0
     for i, bit in enumerate(bits):
+        if bit not in ("1", "0"):
+            raise ValueError("Invalid bit string")
         total += int(bit) * (2**(p-i))
     return total
 
@@ -44,4 +48,3 @@ class WebSocketFrame:
             char_data = get_next_bits(8)
             char = chr(bits_value(char_data) ^ bits_value(self.mask[(x % 4) * 8:((x % 4) * 8) + 8]))
             self.message += char
-        

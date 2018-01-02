@@ -47,9 +47,10 @@ class SocketMessage(metaclass=SocketMessageMetaClass):
         logger.debug("New SocketMessage created '{msg}'".format(msg=self))
 
     def __str__(self):
-        return "{sender}:{recipient}:{msg}".format(sender=self.sender,
+        return "{sender}:{recipient}:{msg}{info}".format(sender=self.sender,
                                                        recipient=self.recipient,
-                                                       msg=self.message)
+                                                       msg=self.message,
+                                                       info=":" + self.info if self.info else "")
     def to_text(self):
         return str(self)
 

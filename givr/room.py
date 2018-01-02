@@ -85,7 +85,7 @@ class SocketRoom(Room):
 
             for connection in connections:
                 try:
-                    data = connection[0].recv(1024)
+                    data = connection[0].recv(4096)
                     if data:
                         response = self.handle_message(connection, data)
                         if response:
@@ -105,7 +105,7 @@ class SocketRoom(Room):
         failed = False
         try:
             handler = getattr(self, "_handle_{msg}".format(msg=msg.message.lower()))
-            resp = handler(msg).to_text()
+            resp = handler(msg)
             return resp
         except GivrException as err:
             logger.warn("A handled application error has occurred: {err}".format(err=err))
@@ -120,13 +120,13 @@ class SocketRoom(Room):
                 return SocketMessage(recipient=msg.sender,
                                      sender=self.room_id,
                                      message=SocketMessage.FAILURE,
-                                     info=fail_msg).to_text()
+                                     info=fail_msg)
 
     def handle_message(self, connection, data):
         data = data.decode() if type(data) == bytes else data
         logger.debug("SocketRoom '{r}' recieved data '{m}'".format(r=self.room_id, m=data))
         msg = SocketMessage.from_text(data)
-        return self.delegate_command(msg)
+        return self.delegate_command(msg).to_text()
 
     def check_recipient(fn):
         @functools.wraps(fn)
@@ -177,12 +177,13 @@ class WebSocketRoom(SocketRoom):
         self.handshook = False
 
     def handle_message(self, conn, data):
+        logger.debug("WebSocket data: {d}".format(d=data))
         if not self.handshook:
             self.handshook = True
             return self.handle_websocket_handshake(data.decode())
         else:
             msg = WebSocketMessage.from_text(data)
-            return self.delegate_command(msg)
+            return self.delegate_command(msg).to_text()
 
     def _get_websocket_accept(self, key):
         return base64.b64encode(hashlib.sha1((key + self.WEBSOCKET_MAGIC).encode()).digest()).decode()
