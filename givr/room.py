@@ -87,7 +87,7 @@ class SocketRoom(Room):
                 try:
                     response = self.connection_handler(connection[0])
                     if response:
-                        connection[0].sendall(response.encode())
+                        connection[0].sendall(response.encode() if hasattr(response, "encode") else response)
                 except socket.error as err:
                     logger.warning("Socket error '{err}'".format(err=err))
                     connections.remove(connection)
@@ -182,17 +182,28 @@ class WebSocketRoom(SocketRoom):
         super(WebSocketRoom, self).__init__(address=address)
         self.handshook = False
 
-
     def connection_handler(self, conn):
         if not self.handshook:
             resp = self.handle_websocket_handshake(conn.recv(1024).decode())
+            logger.debug("Handshake successful")
             self.handshook = True
         else:
-            import pudb; pudb.set_trace()
-            f = WebSocketFrame.read_from_socket(conn)
-            resp = f.message
+            logger.debug("WebSocketRoom '{room_id}' handling connection".format(room_id=self.room_id))
+            try:
+                msg = WebSocketMessage.from_text(conn.recv(4096))
+            except GivrException as err:
+                return WebSocketMessage(sender=self.room_id, recipient=self.room_id, message=SocketMessage.FAILURE).to_bytes()
+            if msg.is_partial() and not msg.is_final():
+                logger.debug("Encountered message fragment")
+                next_msg = self.connection_handler(conn)
+                if next_msg.message == SocketMessage.FAILURE:
+                    resp = next_msg.to_bytes()
+                else:
+                    msg.concat(next_msg)
+                    resp = msg.to_bytes()
+            else:
+                resp = msg.to_bytes()
         return resp
-
 
     def handle_message(self, conn, data):
         logger.debug("WebSocket data: {d}".format(d=data))
@@ -206,11 +217,11 @@ class WebSocketRoom(SocketRoom):
             except GivrException as err:
                 return SocketMessage(sender=self.room_id, recipient=self.room_id, message=SocketMessage.FAILURE).to_text()
 
-
     def _get_websocket_accept(self, key):
         return base64.b64encode(hashlib.sha1((key + self.WEBSOCKET_MAGIC).encode()).digest()).decode()
 
     def handle_websocket_handshake(self, data):
+        logger.debug("Starting handshake")
         split_data = data.split("\r\n")
         method, path, http = split_data[0].split(" ")
         headers = {}

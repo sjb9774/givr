@@ -69,7 +69,24 @@ class SocketMessage(metaclass=SocketMessageMetaClass):
 
 class WebSocketMessage(SocketMessage):
 
+    def __init__(self, sender=None, recipient=None, message=None, info=None):
+        super(WebSocketMessage, self).__init__(sender=sender, recipient=recipient, message=message, info=info)
+        self.frames = [WebSocketFrame(message=self.to_text())]
+
     @classmethod
     def from_text(cls, data):
-        frame = WebSocketFrame(data)
-        return super(WebSocketMessage, cls).from_text(frame.message)
+        frame = WebSocketFrame.from_bytes(data)
+        msg = super(WebSocketMessage, cls).from_text(frame.message)
+        msg.frames = [frame]
+
+    def to_bytes(self):
+        return self.frames[0].to_bytes()
+        
+    def is_partial(self):
+        return self.frames[-1].opcode == 0
+
+    def is_final(self):
+        return bool(self.frames[-1].fin)
+
+    def concat(self, other_msg):
+        self.message.frames.extend(other_msg.frames)

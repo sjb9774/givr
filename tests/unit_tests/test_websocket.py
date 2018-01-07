@@ -37,7 +37,7 @@ class TestWebSocketFrame(unittest.TestCase):
 
     def test_webframe_from_data_non_fragmented(self):
         data = b'\x81\x89I\x96k\xa8\x1d\xd38\xfci\xd2*\xfc\x08'
-        f = WebSocketFrame(data)
+        f = WebSocketFrame.from_bytes(data)
         self.assertEqual(f.message, "TEST DATA")
         self.assertEqual(f.payload_length, 9)
         self.assertEqual(f.opcode, 1)
