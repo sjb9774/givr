@@ -78,10 +78,11 @@ class WebSocketMessage(SocketMessage):
         frame = WebSocketFrame.from_bytes(data)
         msg = super(WebSocketMessage, cls).from_text(frame.message)
         msg.frames = [frame]
+        return msg
 
     def to_bytes(self):
         return self.frames[0].to_bytes()
-        
+
     def is_partial(self):
         return self.frames[-1].opcode == 0
 

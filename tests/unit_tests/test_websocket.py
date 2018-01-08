@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import Mock
 from givr.websocket import WebSocketFrame, bits, bits_value
 
 
@@ -35,11 +36,22 @@ class TestBitsFunctions(unittest.TestCase):
 
 class TestWebSocketFrame(unittest.TestCase):
 
-    def test_webframe_from_data_non_fragmented(self):
+    def test_webframe_from_bytes_non_fragmented(self):
         data = b'\x81\x89I\x96k\xa8\x1d\xd38\xfci\xd2*\xfc\x08'
         f = WebSocketFrame.from_bytes(data)
         self.assertEqual(f.message, "TEST DATA")
         self.assertEqual(f.payload_length, 9)
         self.assertEqual(f.opcode, 1)
         self.assertEqual(f.mask_flag, 1)
-        self.assertEqual(f.mask, "01001001100101100110101110101000")
+        self.assertEqual(f.mask, bits_value("01001001100101100110101110101000"))
+
+    def test_webframe_to_bytes_non_fragmented_no_mask(self):
+        f = WebSocketFrame(message="TEST DATA")
+        bts = f.to_bytes()
+        self.assertEqual(bts, b'\x81\tTEST DATA')
+
+    def test_webframe_to_bytes_non_fragmented_with_mask(self):
+        # generating a mask is usually random which is not good for testing
+        WebSocketFrame.generate_mask = Mock(return_value=525161)
+        f = WebSocketFrame(message="TEST DATA", mask=WebSocketFrame.generate_mask())
+        self.assertEqual(f.to_bytes(), b'\x81\x89\x00\x08\x03iTMP= LB=A')

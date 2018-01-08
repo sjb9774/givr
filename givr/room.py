@@ -54,6 +54,8 @@ import socket, select, re, threading, base64, hashlib
 
 class SocketRoom(Room):
 
+    MessageClass = SocketMessage
+
     def __init__(self, address=('127.0.0.1', 9000)):
         super(SocketRoom, self).__init__()
         self.address = address
@@ -87,6 +89,7 @@ class SocketRoom(Room):
                 try:
                     response = self.connection_handler(connection[0])
                     if response:
+                        logger.debug("Sending message {r}".format(r=response.encode() if hasattr(response, "encode") else response))
                         connection[0].sendall(response.encode() if hasattr(response, "encode") else response)
                 except socket.error as err:
                     logger.warning("Socket error '{err}'".format(err=err))
@@ -106,7 +109,7 @@ class SocketRoom(Room):
     def handle_message(self, connection, data):
         data = data.decode() if type(data) == bytes else data
         logger.debug("SocketRoom '{r}' recieved data '{m}'".format(r=self.room_id, m=data))
-        msg = SocketMessage.from_text(data)
+        msg = self.MessageClass.from_text(data)
         return self.delegate_command(msg).to_text()
 
     def delegate_command(self, msg):
@@ -125,10 +128,10 @@ class SocketRoom(Room):
             fail_msg = "{err_type}: '{err_msg}'".format(err_type=err.__class__.__name__, err_msg=err.args[0])
         finally:
             if failed:
-                return SocketMessage(recipient=msg.sender,
-                                     sender=self.room_id,
-                                     message=SocketMessage.FAILURE,
-                                     info=fail_msg)
+                return self.MessageClass(recipient=msg.sender,
+                                         sender=self.room_id,
+                                         message=SocketMessage.FAILURE,
+                                         info=fail_msg)
 
     def stop_listening(self):
         logger.debug("Stopping listening for room '{r}'".format(r=self.room_id))
@@ -139,10 +142,10 @@ class SocketRoom(Room):
         def wrapped_fn(self, msg):
             if msg.recipient != self.room_id:
                 logger.warn("Message sent to incorrect room: {msg}".format(msg=msg))
-                return SocketMessage(recipient=msg.sender,
-                                     sender=self.room_id,
-                                     message=SocketMessage.FAILURE,
-                                     info="Message not intended for this room")
+                return self.MessageClass(recipient=msg.sender,
+                                         sender=self.room_id,
+                                         message=SocketMessage.FAILURE,
+                                         info="Message not intended for this room")
             else:
                 return fn(self, msg)
         return wrapped_fn
@@ -151,13 +154,13 @@ class SocketRoom(Room):
     def _handle_join(self, msg):
         user = User.from_user_id(msg.sender)
         self.add_user(user)
-        return SocketMessage(recipient=msg.sender, sender=self.room_id, message=SocketMessage.SUCCESS)
+        return self.MessageClass(recipient=msg.sender, sender=self.room_id, message=SocketMessage.SUCCESS)
 
     @check_recipient
     def _handle_leave(self, msg):
         user = User.from_user_id(msg.sender)
         self.remove_user(user)
-        return SocketMessage(recipient=msg.sender, sender=self.room_id, message=SocketMessage.SUCCESS)
+        return self.MessageClass(recipient=msg.sender, sender=self.room_id, message=SocketMessage.SUCCESS)
 
     @check_recipient
     def _handle_giveaway(self, msg):
@@ -168,15 +171,16 @@ class SocketRoom(Room):
         else:
             g = Giveaway(users=self.users)
             winner = g.draw(1)[-1]
-            return SocketMessage(sender=self.room_id,
-                                 recipient=sender.user_id,
-                                 message=SocketMessage.SUCCESS,
-                                 info=winner.user_id)
+            return self.MessageClass(sender=self.room_id,
+                                     recipient=sender.user_id,
+                                     message=SocketMessage.SUCCESS,
+                                     info=winner.user_id)
 
 
 class WebSocketRoom(SocketRoom):
 
     WEBSOCKET_MAGIC = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+    MessageClass = WebSocketMessage
 
     def __init__(self, address=('127.0.0.1', 9000)):
         super(WebSocketRoom, self).__init__(address=address)
@@ -190,9 +194,11 @@ class WebSocketRoom(SocketRoom):
         else:
             logger.debug("WebSocketRoom '{room_id}' handling connection".format(room_id=self.room_id))
             try:
-                msg = WebSocketMessage.from_text(conn.recv(4096))
+                data = conn.recv(4096)
+                msg = self.handle_message(conn, data)
             except GivrException as err:
-                return WebSocketMessage(sender=self.room_id, recipient=self.room_id, message=SocketMessage.FAILURE).to_bytes()
+                logger.error("{err}".format(err=err))
+                return self.MessageClass(sender=self.room_id, recipient=self.room_id, message=SocketMessage.FAILURE).to_bytes()
             if msg.is_partial() and not msg.is_final():
                 logger.debug("Encountered message fragment")
                 next_msg = self.connection_handler(conn)
@@ -207,15 +213,11 @@ class WebSocketRoom(SocketRoom):
 
     def handle_message(self, conn, data):
         logger.debug("WebSocket data: {d}".format(d=data))
-        if not self.handshook:
-            self.handshook = True
-            return self.handle_websocket_handshake(data.decode())
-        else:
-            try:
-                msg = WebSocketMessage.from_text(data)
-                return self.delegate_command(msg).to_text()
-            except GivrException as err:
-                return SocketMessage(sender=self.room_id, recipient=self.room_id, message=SocketMessage.FAILURE).to_text()
+        try:
+            msg = self.MessageClass.from_text(data)
+            return self.delegate_command(msg)
+        except GivrException as err:
+            return self.MessageClass(sender=self.room_id, recipient=self.room_id, message=SocketMessage.FAILURE).to_text()
 
     def _get_websocket_accept(self, key):
         return base64.b64encode(hashlib.sha1((key + self.WEBSOCKET_MAGIC).encode()).digest()).decode()
