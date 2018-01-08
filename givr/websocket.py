@@ -38,6 +38,8 @@ def to_binary(n, pad_to=None):
 
 import select
 import random
+
+
 class WebSocketFrame:
 
     def __init__(self, fin=1, opcode=1, rsv=0, mask=None, message=None):
@@ -70,8 +72,8 @@ class WebSocketFrame:
         split_to_bytes = [bits_value(full_bit_str[x:x+8]) for x in range(0, len(full_bit_str), 8)]
         return bytes(split_to_bytes)
 
-    @classmethod
-    def generate_mask(self):
+    @staticmethod
+    def generate_mask():
         return random.randint(0, (2 ** 32) - 1)
 
     @classmethod
@@ -80,7 +82,6 @@ class WebSocketFrame:
         bit_generator = (bit for bit in full_bit_str)
         get_next_bits = lambda x: "".join(next(bit_generator) for i in range(x))
 
-        #   First find the payload length
         fin = bits_value(get_next_bits(1))
         rsv = bits_value(get_next_bits(3)) # can be safely ignored
         opcode = bits_value(get_next_bits(4))

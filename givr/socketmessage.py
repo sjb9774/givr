@@ -77,7 +77,6 @@ class WebSocketMessage(SocketMessage):
     def from_text(cls, data):
         frame = WebSocketFrame.from_bytes(data)
         msg = super(WebSocketMessage, cls).from_text(frame.message)
-        msg.frames = [frame]
         return msg
 
     def to_bytes(self):
@@ -90,4 +89,4 @@ class WebSocketMessage(SocketMessage):
         return bool(self.frames[-1].fin)
 
     def concat(self, other_msg):
-        self.message.frames.extend(other_msg.frames)
+        self.frames.extend(other_msg.frames)

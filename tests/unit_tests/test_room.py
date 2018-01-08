@@ -144,7 +144,7 @@ class TestWebSocketRoom(unittest.TestCase):
         self.room = WebSocketRoom()
 
     def test_handle_handshake(self):
-        client_handshake = "GET / HTTP/1.1\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
+        client_handshake = bytes("GET / HTTP/1.1\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n", "utf-8")
         handshake_response = self.room.handle_websocket_handshake(client_handshake).split("\r\n")
         self.assertEqual(handshake_response[0], "HTTP/1.1 101 Switching Protocols")
         headers = {k: v for k,v in [header.split(": ") for header in handshake_response[1:4]]}
