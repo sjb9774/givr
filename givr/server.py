@@ -34,19 +34,18 @@ class SocketServer:
             for c in conn:
                 connections.append(self.socket.accept())
                 self.logger.debug("New connection created at {addr}".format(addr=connections[-1]))
-
             for connection in connections:
                 try:
                     response = self.connection_handler(connection[0])
                     if response:
                         self.logger.debug("Sending message {r}".format(r=response.encode() if hasattr(response, "encode") else response))
                         connection[0].sendall(response.encode() if hasattr(response, "encode") else response)
-                except socket.error as err:
+                except socket.err as err:
                     self.logger.warning("Socket error '{err}'".format(err=err))
                     connections.remove(connection)
         self.logger.debug("Server done listening")
         self.socket.close()
-        [c.close() for c in connections]
+        [c[0].close() for c in connections]
 
     def connection_handler(self, connection):
         data = connection.recv(4096)
