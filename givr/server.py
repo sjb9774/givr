@@ -2,6 +2,49 @@ import logging
 import socket, select, threading
 
 
+class ConnectionPool:
+
+    def __init__(self):
+        self.cursor = 0
+        self.connections = []
+
+    def __next__(self):
+        return self.next()
+
+    def add(self, connection):
+        self.connections.append(connection)
+
+    def remove(self, connection):
+        self.connections.remove(connection)
+
+    def next(self):
+        return self.connections[self.inc_cursor()]
+
+    def get_cursor(self):
+        return self.cursor
+
+    def inc_cursor(self):
+        self.cursor += 1
+        self.cursor %= len(self.connections)
+        return self.get_cursor()
+
+    def dec_cursor(self):
+        self.cursor -= 1
+        self.cursor %= len(self.connections)
+        return self.get_cursor()
+
+
+class SocketConnection:
+
+    def __init__(self, sck, address, port):
+        self.socket = sck
+        self.address = address[0]
+        self.port = port
+        self.handshook = False
+
+    def close(self):
+        self.socket.close()
+
 class SocketServer:
 
     def __init__(self, address=('127.0.0.1', 9000), logger=None):
@@ -32,23 +75,28 @@ class SocketServer:
         while self.listening:
             conn, _, _ = select.select([self.socket], [], [], .1)
             for c in conn:
-                connections.append(self.socket.accept())
-                self.logger.debug("New connection created at {addr}".format(addr=connections[-1]))
+                sck, addr = self.socket.accept()
+                self.logger.debug("{addr}".format(addr=addr))
+                connection = SocketConnection(sck, addr[0], addr[1])
+                connections.append(connection)
+                self.logger.debug("New connection created at {addr}".format(addr=connections[-1].address))
             for connection in connections:
                 try:
-                    response = self.connection_handler(connection[0])
-                    if response:
-                        self.logger.debug("Sending message {r}".format(r=response.encode() if hasattr(response, "encode") else response))
-                        connection[0].sendall(response.encode() if hasattr(response, "encode") else response)
-                except socket.err as err:
+                    avail_data, _, _ = select.select([connection.socket], [], [], .1)
+                    if avail_data:
+                        response = self.connection_handler(connection)
+                        if response:
+                            self.logger.debug("Sending message {r}".format(r=response.encode() if hasattr(response, "encode") else response))
+                            connection.socket.sendall(response.encode() if hasattr(response, "encode") else response)
+                except BaseException as err:
                     self.logger.warning("Socket error '{err}'".format(err=err))
                     connections.remove(connection)
         self.logger.debug("Server done listening")
         self.socket.close()
-        [c[0].close() for c in connections]
+        [c.close() for c in connections]
 
     def connection_handler(self, connection):
-        data = connection.recv(4096)
+        data = connection.socket.recv(4096)
         if data:
             response = self.handle_message(connection, data)
             return response
@@ -71,19 +119,37 @@ class WebSocketServer(SocketServer):
 
     def __init__(self, address=('127.0.0.1', 9000), logger=None):
         super(WebSocketServer, self).__init__(address=address, logger=logger)
-        self.handshook = False
+        self.fragmented_messages = {}
 
     def connection_handler(self, conn):
-        data = conn.recv(4096)
-        if not self.handshook:
-            self.handshook = True
+        data = conn.socket.recv(4096)
+        if not conn.handshook:
+            conn.handshook = True
             return self.handle_websocket_handshake(data)
         else:
-            all_frames = []
-            all_frames.append(WebSocketFrame.from_bytes(data))
-            while all_frames[-1].fin == 0:
-                all_frames.append(WebSocketFrame.from_bytes(conn.recv(4096)))
-            complete_message = "".join(f.message for f in all_frames)
+            frame = WebSocketFrame.from_bytes(data)
+            if not bool(frame.fin):
+                self.fragmented_messages.setdefault(conn, [])
+                self.fragmented_messages[conn].append(frame)
+                return None
+            else: # is final frame
+                message_fragments = self.fragmented_messages.get(conn)
+                if message_fragments:
+                    complete_message = "".join(f.message for f in message_fragments)
+                    complete_message += frame.message
+                    self.fragmented_messages[conn] = []
+                # check for special frames (PING, close, etc)
+                elif frame.opcode == WebSocketFrame.OPCODE_PING:
+                    self.logger.debug("Recieved PING, sending PONG")
+                    return WebSocketFrame(message=frame.message, opcode=WebSocketFrame.OPCODE_PONG).to_bytes()
+                elif frame.opcode == WebSocketFrame.OPCODE_PONG:
+                    self.logger.debug("Recieved PONG, ignoring")
+                    return None # ignore pongs
+                elif frame.opcode == WebSocketFrame.OPCODE_CLOSE:
+                    self.logger.debug("Recieved close frame with message: {m}".format(m=complete_message))
+                    return WebSocketFrame(message=frame.message, opcode=WebSocketFrame.OPCODE_CLOSE).to_bytes()
+                else: #normal message
+                    complete_message = frame.message
             response = self.handle_message(conn, complete_message)
             return WebSocketFrame(message=response).to_bytes()
 

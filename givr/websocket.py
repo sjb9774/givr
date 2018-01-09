@@ -42,6 +42,10 @@ import random
 
 class WebSocketFrame:
 
+    OPCODE_CLOSE    = 8
+    OPCODE_PING     = 9
+    OPCODE_PONG     = 10
+
     def __init__(self, fin=1, opcode=1, rsv=0, mask=None, message=None):
         self.fin = fin
         self.opcode = opcode
