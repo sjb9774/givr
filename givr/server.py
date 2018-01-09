@@ -36,13 +36,16 @@ class ConnectionPool:
 
 class SocketConnection:
 
-    def __init__(self, sck, address, port):
+    def __init__(self, sck, address, port, logger=None):
         self.socket = sck
-        self.address = address[0]
+        self.address = address
         self.port = port
         self.handshook = False
+        self.to_be_closed = False
+        self.logger = logger if logger else logging.getLogger()
 
     def close(self):
+        self.logger.debug("Closing connection at {addr}:{port}".format(addr=self.address, port=self.port))
         self.socket.close()
 
 class SocketServer:
@@ -77,9 +80,11 @@ class SocketServer:
             for c in conn:
                 sck, addr = self.socket.accept()
                 self.logger.debug("{addr}".format(addr=addr))
-                connection = SocketConnection(sck, addr[0], addr[1])
+                connection = SocketConnection(sck, addr[0], addr[1], logger=self.logger)
                 connections.append(connection)
-                self.logger.debug("New connection created at {addr}".format(addr=connections[-1].address))
+                self.logger.debug("New connection created at {addr}:{port}".format(addr=connections[-1].address, port=connections[-1].port))
+                self.logger.debug("Total connections: {n}".format(n=len(connections)))
+            new_connection_list = connections[:]
             for connection in connections:
                 try:
                     avail_data, _, _ = select.select([connection.socket], [], [], .1)
@@ -88,12 +93,24 @@ class SocketServer:
                         if response:
                             self.logger.debug("Sending message {r}".format(r=response.encode() if hasattr(response, "encode") else response))
                             connection.socket.sendall(response.encode() if hasattr(response, "encode") else response)
-                except BaseException as err:
+                        if connection.to_be_closed:
+                            new_connection_list.remove(connection)
+                            connection.close()
+                except socket.error as err:
                     self.logger.warning("Socket error '{err}'".format(err=err))
-                    connections.remove(connection)
-        self.logger.debug("Server done listening")
-        self.socket.close()
+                    new_connection_list.remove(connection)
+                    connection.close()
+                except KeyboardInterrupt as err:
+                    self.logger.warn("Manually interrupting server")
+                    self.stop_listening()
+                    break
+            connections = new_connection_list
+
+        self.logger.debug("Closing {n} connections".format(n=len(connections)))
         [c.close() for c in connections]
+        self.logger.debug("Closing server socket")
+        self.socket.close()
+        self.logger.debug("Server done listening")
 
     def connection_handler(self, connection):
         data = connection.socket.recv(4096)
@@ -123,6 +140,7 @@ class WebSocketServer(SocketServer):
 
     def connection_handler(self, conn):
         data = conn.socket.recv(4096)
+        self.logger.debug("Websocket server handling data: {data}".format(data=data))
         if not conn.handshook:
             conn.handshook = True
             return self.handle_websocket_handshake(data)
@@ -146,7 +164,8 @@ class WebSocketServer(SocketServer):
                     self.logger.debug("Recieved PONG, ignoring")
                     return None # ignore pongs
                 elif frame.opcode == WebSocketFrame.OPCODE_CLOSE:
-                    self.logger.debug("Recieved close frame with message: {m}".format(m=complete_message))
+                    self.logger.debug("Recieved close frame with message: {m}".format(m=frame.message))
+                    conn.to_be_closed = True
                     return WebSocketFrame(message=frame.message, opcode=WebSocketFrame.OPCODE_CLOSE).to_bytes()
                 else: #normal message
                     complete_message = frame.message
