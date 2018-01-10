@@ -45,6 +45,12 @@ class TestSocketServer(unittest.TestCase):
         connection_mock.socket.recv.assert_called_once_with(4096)
         self.server.handle_message.assert_called_once_with(connection_mock, "MOCK BYTES")
 
+    def test_connection_handler_without_resp(self):
+        c = Mock()
+        c.socket.recv = Mock(return_value=None)
+        resp = self.server.connection_handler(c)
+        self.assertIsNone(resp)
+
     def test_stop_listening(self):
         self.server.dlisten()
         self.server.stop_listening()
@@ -57,6 +63,15 @@ class TestWebSocketServer(unittest.TestCase):
         givr.server.select = Mock(select=Mock(return_value=([Mock()], None, None)))
         givr.server.threading = Mock()
         self.server = givr.server.WebSocketServer()
+
+    def test_handle_handshake(self):
+        client_handshake = bytes("GET / HTTP/1.1\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n", "utf-8")
+        handshake_response = self.server.handle_websocket_handshake(Mock(name="CONNECTION"), client_handshake).split("\r\n")
+        self.assertEqual(handshake_response[0], "HTTP/1.1 101 Switching Protocols")
+        headers = {k: v for k,v in [header.split(": ") for header in handshake_response[1:4]]}
+        self.assertEqual(headers.get("Upgrade"), "websocket")
+        self.assertEqual(headers.get("Connection"), "Upgrade")
+        self.assertEqual(headers.get("Sec-WebSocket-Accept"), "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=")
 
     def test_connection_handler_ping(self):
         conn_mock = Mock()

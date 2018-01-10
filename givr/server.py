@@ -94,6 +94,7 @@ class SocketServer:
                             self.logger.debug("Sending message {r}".format(r=response.encode() if hasattr(response, "encode") else response))
                             connection.socket.sendall(response.encode() if hasattr(response, "encode") else response)
                         if connection.to_be_closed:
+                            self.logger.debug("Closing connection marked for closure")
                             new_connection_list.remove(connection)
                             connection.close()
                 except socket.error as err:
@@ -142,8 +143,7 @@ class WebSocketServer(SocketServer):
         data = conn.socket.recv(4096)
         self.logger.debug("Websocket server handling data: {data}".format(data=data))
         if not conn.handshook:
-            conn.handshook = True
-            return self.handle_websocket_handshake(data)
+            return self.handle_websocket_handshake(conn, data)
         else:
             frame = WebSocketFrame.from_bytes(data)
             if not bool(frame.fin):
@@ -175,18 +175,29 @@ class WebSocketServer(SocketServer):
     def _get_websocket_accept(self, key):
         return base64.b64encode(hashlib.sha1((key + self.WEBSOCKET_MAGIC).encode()).digest()).decode()
 
-    def handle_websocket_handshake(self, data):
+    def handle_websocket_handshake(self, conn, data):
         self.logger.debug("Starting handshake")
         split_data = data.decode().split("\r\n")
         method, path, http = split_data[0].split(" ")
         headers = {}
-        for header in split_data[1:]:
-            if ": " in header:
-                key, value = header.split(": ")
-                headers[key] = value
-        accept = self._get_websocket_accept(headers.get("Sec-WebSocket-Key"))
-        response = "".join(["HTTP/1.1 101 Switching Protocols\r\n",
-                            "Upgrade: websocket\r\n",
-                            "Connection: Upgrade\r\n",
-                            "Sec-WebSocket-Accept: {accept}\r\n\r\n".format(accept=accept)])
+        try:
+            for header in split_data[1:]:
+                if ": " in header:
+                    key, value = header.split(": ")
+                    headers[key] = value
+        except TypeError as err:
+            self.logger.error("Malformed headers in client handshake, closing connection")
+            conn.to_be_closed = True
+            response = ""
+        except BaseException as err:
+            self.logger.error("Unexpected error encountered, closing connection: {msg}".format(msg=err))
+            conn.to_be_closed = True
+            response = ""
+        else:
+            accept = self._get_websocket_accept(headers.get("Sec-WebSocket-Key"))
+            response = "".join(["HTTP/1.1 101 Switching Protocols\r\n",
+                                "Upgrade: websocket\r\n",
+                                "Connection: Upgrade\r\n",
+                                "Sec-WebSocket-Accept: {accept}\r\n\r\n".format(accept=accept)])
+            conn.handshook = True
         return response

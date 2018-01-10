@@ -143,15 +143,15 @@ class TestWebSocketRoom(unittest.TestCase):
     def setUp(self):
         self.room = WebSocketRoom()
 
-    def test_handle_handshake(self):
-        client_handshake = bytes("GET / HTTP/1.1\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n", "utf-8")
-        handshake_response = self.room.handle_websocket_handshake(client_handshake).split("\r\n")
-        self.assertEqual(handshake_response[0], "HTTP/1.1 101 Switching Protocols")
-        headers = {k: v for k,v in [header.split(": ") for header in handshake_response[1:4]]}
-        self.assertEqual(headers.get("Upgrade"), "websocket")
-        self.assertEqual(headers.get("Connection"), "Upgrade")
-        self.assertEqual(headers.get("Sec-WebSocket-Accept"), "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=")
+    def test_handle_message_good_message(self):
+        t = Mock()
+        t.to_text = Mock(return_value="TEST RESPONSE")
+        delegate = Mock(return_value=t)
+        self.room.delegate_command = delegate
+        uuid1 = str(uuid.uuid1())
+        txt = "{sender}:{recipient}:{message}".format(sender=uuid1, recipient=self.room.room_id, message="JOIN")
+        r = self.room.handle_message(Mock(name="CONNECTION"), txt)
+        self.assertEqual(r, "TEST RESPONSE")
 
-    def test_handle_message(self):
-        self.room.handshook = True # assume the handshake succeeded, it's tested above
-        response = self.room.handle_message
+
+
