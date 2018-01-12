@@ -1,5 +1,6 @@
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, MagicMock
+from unittest import mock
 import givr.server
 import socket
 
@@ -16,10 +17,11 @@ class TestSocketServer(unittest.TestCase):
         givr.server.socket.socket.assert_called_once_with(givr.server.socket.AF_INET, givr.server.socket.SOCK_STREAM)
         self.server.socket.bind.assert_called_once_with(("127.0.0.1", 9000))
 
-    def test_listening_stop_listening(self):
+    def test_listen(self):
         self.server._create_socket = Mock()
-        self.server.socket = Mock(accept=Mock(return_value=(Mock(), ["TEST ADDRESS", 5555])))
-        # listen just once
+        mock_conn = Mock()
+        self.server.socket = Mock(accept=Mock(return_value=(mock_conn, ["TEST ADDRESS", 5555])))
+        # listen just once or we'll never get out of the loop
         def fn(conn):
             self.assertTrue(self.server.listening)
             self.server.stop_listening()
@@ -30,6 +32,7 @@ class TestSocketServer(unittest.TestCase):
         self.server._create_socket.assert_called_once_with()
         self.server.socket.close.assert_called_once_with()
         self.server.socket.accept()[0].close.assert_called_once_with()
+        mock_conn.sendall.assert_called_once_with("TEST".encode())
 
     def test_dlisten(self):
         givr.server.threading = Mock(Thread=Mock(start=Mock()))
@@ -52,9 +55,27 @@ class TestSocketServer(unittest.TestCase):
         self.assertIsNone(resp)
 
     def test_stop_listening(self):
+        self.server._create_socket()
         self.server.dlisten()
         self.server.stop_listening()
         self.assertFalse(self.server.listening)
+
+    @mock.patch("givr.server.SocketConnection")
+    def test_connection_removed_before_processing(self, sc):
+        def fn():
+            self.server.stop_listening()
+            return mock.DEFAULT # so mock will return the return value we set >_>
+
+        sc.return_value.is_to_be_closed.return_value = True
+        sc.return_value.is_to_be_closed.side_effect = fn
+        givr.server.select.select = Mock(return_value=[[Mock()], [], []])
+        self.server._create_socket()
+        self.server.socket.accept = Mock(return_value=(Mock(), ("TEST ADDRESS", 5555)))
+        self.server.handle_connection = Mock()
+        self.server.listen()
+
+        sc.return_value.is_to_be_closed.assert_called_once_with()
+        self.server.handle_connection.assert_not_called()
 
 class TestWebSocketServer(unittest.TestCase):
 
@@ -80,6 +101,14 @@ class TestWebSocketServer(unittest.TestCase):
         conn_mock.socket.recv = Mock(return_value=b'\x89\x00')
         resp = self.server.connection_handler(conn_mock)
         self.assertEqual(resp, b'\x8a\x00') # messageless PONG response
+
+    def test_connection_handler_pong(self):
+        conn_mock = Mock()
+        conn_mock.handshook = True
+        conn_mock.socket = Mock()
+        conn_mock.socket.recv = Mock(return_value=b'\x8a\x00')
+        resp = self.server.connection_handler(conn_mock)
+        self.assertIsNone(resp)
 
     def test_connection_handler_fragmented_message_no_mask(self):
         self._test_connection_handler_fragmented_message(b'\x01\x11partial message 1',
