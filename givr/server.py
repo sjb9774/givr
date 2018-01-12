@@ -48,12 +48,25 @@ class SocketConnection:
         self.logger.debug("Closing connection at {addr}:{port}".format(addr=self.address, port=self.port))
         self.socket.close()
 
+    def mark_handshook(self):
+        self.handshook = True
+
+    def is_handshook(self):
+        return self.handshook
+
+    def mark_for_closing(self):
+        self.to_be_closed = True
+
+    def is_to_be_closed(self):
+        return self.to_be_closed
+
 class SocketServer:
 
     def __init__(self, address=('127.0.0.1', 9000), logger=None):
         self.address = address
         self.listening = False
         self.set_logger(logger if logger else logging.getLogger())
+        self.connections = []
 
     def _create_socket(self):
         self.logger.debug("Creating socket")
@@ -61,6 +74,7 @@ class SocketServer:
         self.socket.bind(self.address)
 
     def dlisten(self):
+        """ Creates, starts, and returns a threading.Thread that runs the `listen` method """
         t = threading.Thread(target=self.listen)
         t.start()
         return t
@@ -69,10 +83,13 @@ class SocketServer:
         self.logger = logger
 
     def listen(self):
+        """ Creates and binds a socket connection at `address` on `port`, then listens for incoming
+            client connections, reads data from them and sends back the return value of `connection_handler`
+            as a response. Business logic should be handled in `handle_message` in subclasses,
+            unless there are specialized cases for connections that need to be handled. """
         self._create_socket()
         self.logger.debug("Listening on socket")
         self.socket.listen(100)
-        connections = []
 
         self.listening = True
         while self.listening:
@@ -81,11 +98,18 @@ class SocketServer:
                 sck, addr = self.socket.accept()
                 self.logger.debug("{addr}".format(addr=addr))
                 connection = SocketConnection(sck, addr[0], addr[1], logger=self.logger)
-                connections.append(connection)
-                self.logger.debug("New connection created at {addr}:{port}".format(addr=connections[-1].address, port=connections[-1].port))
-                self.logger.debug("Total connections: {n}".format(n=len(connections)))
-            new_connection_list = connections[:]
-            for connection in connections:
+                self.connections.append(connection)
+                self.logger.debug("New connection created at {addr}:{port}".format(addr=self.connections[-1].address, port=self.connections[-1].port))
+                self.logger.debug("Total connections: {n}".format(n=len(self.connections)))
+            # this list will be the list of valid connections left (after creating new connections and closing old ones)
+            # after we've finished looping through all the currently active connections
+            new_connection_list = self.connections[:]
+            for connection in self.connections:
+                if connection.is_to_be_closed():
+                    self.logger.warn("Connection to be closed before recieving data, closing")
+                    new_connection_list.remove(connection)
+                    connection.close()
+                    continue
                 try:
                     avail_data, _, _ = select.select([connection.socket], [], [], .1)
                     if avail_data:
@@ -93,7 +117,7 @@ class SocketServer:
                         if response:
                             self.logger.debug("Sending message {r}".format(r=response.encode() if hasattr(response, "encode") else response))
                             connection.socket.sendall(response.encode() if hasattr(response, "encode") else response)
-                        if connection.to_be_closed:
+                        if connection.is_to_be_closed():
                             self.logger.debug("Closing connection marked for closure")
                             new_connection_list.remove(connection)
                             connection.close()
@@ -105,15 +129,16 @@ class SocketServer:
                     self.logger.warn("Manually interrupting server")
                     self.stop_listening()
                     break
-            connections = new_connection_list
-
-        self.logger.debug("Closing {n} connections".format(n=len(connections)))
-        [c.close() for c in connections]
-        self.logger.debug("Closing server socket")
-        self.socket.close()
-        self.logger.debug("Server done listening")
+            self.connections = new_connection_list
+        self.stop_listening()
+        self._stop_server()
 
     def connection_handler(self, connection):
+        """ Takes a SocketConnection as an argument and passes data recieved from it
+            to `handle_message` which should return the appropriate response for the
+            application. Can be overriden for preprocessing connections/data before
+            building a response such as decoding/encoding data before it's passed to
+            the business logic portion of your application """
         data = connection.socket.recv(4096)
         if data:
             response = self.handle_message(connection, data)
@@ -122,9 +147,20 @@ class SocketServer:
             return None
 
     def handle_message(self, connection, data):
+        """ Should be overriden by subclasses. Responsible for taking raw bytes and
+            returning the business logic response in bytes """
         return "Hello world"
 
+    def _stop_server(self):
+        self.logger.debug("Closing {n} connections".format(n=len(self.connections)))
+        [c.close() for c in self.connections]
+        self.logger.debug("Closing server socket")
+        self.socket.close()
+        self.logger.debug("Server done listening")
+
     def stop_listening(self):
+        """ Sets a flag for the server to stop taking new requests and then gracefully close all
+            connections after finishing processing the current pool. """
         self.logger.debug("Stopping listening")
         self.listening = False
 
@@ -142,7 +178,7 @@ class WebSocketServer(SocketServer):
     def connection_handler(self, conn):
         data = conn.socket.recv(4096)
         self.logger.debug("Websocket server handling data: {data}".format(data=data))
-        if not conn.handshook:
+        if not conn.is_handshook():
             return self.handle_websocket_handshake(conn, data)
         else:
             frame = WebSocketFrame.from_bytes(data)
@@ -187,11 +223,11 @@ class WebSocketServer(SocketServer):
                     headers[key] = value
         except TypeError as err:
             self.logger.error("Malformed headers in client handshake, closing connection")
-            conn.to_be_closed = True
+            conn.mark_for_closing()
             response = ""
         except BaseException as err:
             self.logger.error("Unexpected error encountered, closing connection: {msg}".format(msg=err))
-            conn.to_be_closed = True
+            conn.mark_for_closing()
             response = ""
         else:
             accept = self._get_websocket_accept(headers.get("Sec-WebSocket-Key"))
@@ -199,5 +235,5 @@ class WebSocketServer(SocketServer):
                                 "Upgrade: websocket\r\n",
                                 "Connection: Upgrade\r\n",
                                 "Sec-WebSocket-Accept: {accept}\r\n\r\n".format(accept=accept)])
-            conn.handshook = True
+            conn.mark_handshook()
         return response
