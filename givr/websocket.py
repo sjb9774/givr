@@ -61,7 +61,14 @@ class WebSocketFrame:
         full_bit_str += to_binary(self.rsv, pad_to=3)
         full_bit_str += to_binary(self.opcode, pad_to=4)
         full_bit_str += to_binary(self.mask_flag, pad_to=1)
-        full_bit_str += to_binary(self.payload_length, pad_to=7)
+        if self.payload_length <= 125:
+            full_bit_str += to_binary(self.payload_length, pad_to=7)
+        elif self.payload_length == 126:
+            full_bit_str += to_binary(126, pad_to=7)
+            full_bit_str += to_binary(self.payload_length, pad_to=16)
+        elif self.payload_length > 126:
+            full_bit_str += to_binary(127, pad_to=7)
+            full_bit_str += to_binary(self.payload_length, pad_to=64)
         if bool(self.mask_flag):
             mask_bits = to_binary(self.mask, pad_to=32)
             full_bit_str += mask_bits
@@ -82,6 +89,7 @@ class WebSocketFrame:
 
     @classmethod
     def from_bytes(cls, in_bytes):
+        #import pudb; pudb.set_trace()
         full_bit_str = "".join([bits(byte) for byte in in_bytes])
         bit_generator = (bit for bit in full_bit_str)
         get_next_bits = lambda x: "".join(next(bit_generator) for i in range(x))

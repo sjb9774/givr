@@ -71,7 +71,11 @@ class SocketServer:
     def _create_socket(self):
         self.logger.debug("Creating socket")
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.socket.bind(self.address)
+        try:
+            self.socket.bind(self.address)
+        except OSError as err:
+            self.logger.error("Couldn't bind to socket: '{msg}'".format(msg=err.args))
+            self.socket = None
 
     def dlisten(self):
         """ Creates, starts, and returns a threading.Thread that runs the `listen` method """
@@ -88,50 +92,55 @@ class SocketServer:
             as a response. Business logic should be handled in `handle_message` in subclasses,
             unless there are specialized cases for connections that need to be handled. """
         self._create_socket()
-        self.logger.debug("Listening on socket")
-        self.socket.listen(100)
+        if not self.socket:
+            self.logger.warn("Socket not successfully initialized, check logs for details. Aborting listen()")
+            self.stop_listening()
+            self._stop_server()
+        else:
+            self.logger.debug("Listening on socket")
+            self.socket.listen(100)
 
-        self.listening = True
-        while self.listening:
-            conn, _, _ = select.select([self.socket], [], [], .1)
-            for c in conn:
-                sck, addr = self.socket.accept()
-                self.logger.debug("{addr}".format(addr=addr))
-                connection = SocketConnection(sck, addr[0], addr[1], logger=self.logger)
-                self.connections.append(connection)
-                self.logger.debug("New connection created at {addr}:{port}".format(addr=self.connections[-1].address, port=self.connections[-1].port))
-                self.logger.debug("Total connections: {n}".format(n=len(self.connections)))
-            # this list will be the list of valid connections left (after creating new connections and closing old ones)
-            # after we've finished looping through all the currently active connections
-            new_connection_list = self.connections[:]
-            for connection in self.connections:
-                if connection.is_to_be_closed():
-                    self.logger.warn("Connection to be closed before recieving data, closing")
-                    new_connection_list.remove(connection)
-                    connection.close()
-                    continue
-                try:
-                    avail_data, _, _ = select.select([connection.socket], [], [], .1)
-                    if avail_data:
-                        response = self.connection_handler(connection)
-                        if response:
-                            self.logger.debug("Sending message {r}".format(r=response.encode() if hasattr(response, "encode") else response))
-                            connection.socket.sendall(response.encode() if hasattr(response, "encode") else response)
-                        if connection.is_to_be_closed():
-                            self.logger.debug("Closing connection marked for closure")
-                            new_connection_list.remove(connection)
-                            connection.close()
-                except socket.error as err:
-                    self.logger.warning("Socket error '{err}'".format(err=err))
-                    new_connection_list.remove(connection)
-                    connection.close()
-                except KeyboardInterrupt as err:
-                    self.logger.warn("Manually interrupting server")
-                    self.stop_listening()
-                    break
-            self.connections = new_connection_list
-        self.stop_listening()
-        self._stop_server()
+            self.listening = True
+            while self.listening:
+                conn, _, _ = select.select([self.socket], [], [], .1)
+                for c in conn:
+                    sck, addr = self.socket.accept()
+                    self.logger.debug("{addr}".format(addr=addr))
+                    connection = SocketConnection(sck, addr[0], addr[1], logger=self.logger)
+                    self.connections.append(connection)
+                    self.logger.debug("New connection created at {addr}:{port}".format(addr=self.connections[-1].address, port=self.connections[-1].port))
+                    self.logger.debug("Total connections: {n}".format(n=len(self.connections)))
+                # this list will be the list of valid connections left (after creating new connections and closing old ones)
+                # after we've finished looping through all the currently active connections
+                new_connection_list = self.connections[:]
+                for connection in self.connections:
+                    if connection.is_to_be_closed():
+                        self.logger.warn("Connection to be closed before recieving data, closing")
+                        new_connection_list.remove(connection)
+                        connection.close()
+                        continue
+                    try:
+                        avail_data, _, _ = select.select([connection.socket], [], [], .1)
+                        if avail_data:
+                            response = self.connection_handler(connection)
+                            if response:
+                                self.logger.debug("Sending message {r}".format(r=response.encode() if hasattr(response, "encode") else response))
+                                connection.socket.sendall(response.encode() if hasattr(response, "encode") else response)
+                            if connection.is_to_be_closed():
+                                self.logger.debug("Closing connection marked for closure")
+                                new_connection_list.remove(connection)
+                                connection.close()
+                    except socket.error as err:
+                        self.logger.warning("Socket error '{err}'".format(err=err))
+                        new_connection_list.remove(connection)
+                        connection.close()
+                    except KeyboardInterrupt as err:
+                        self.logger.warn("Manually interrupting server")
+                        self.stop_listening()
+                        break
+                self.connections = new_connection_list
+            self.stop_listening()
+            self._stop_server()
 
     def connection_handler(self, connection):
         """ Takes a SocketConnection as an argument and passes data recieved from it
