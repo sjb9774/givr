@@ -41,7 +41,9 @@ import random
 
 
 class WebSocketFrame:
-
+    # WebSockets definition requires that the most significant digit be 0 for
+    # 64 bit payload lengths
+    MAX_PAYLOAD_LENGTH = (2 ** 63) - 1
     OPCODE_CLOSE    = 8
     OPCODE_PING     = 9
     OPCODE_PONG     = 10
@@ -52,6 +54,8 @@ class WebSocketFrame:
         self.mask_flag = 1 if mask else 0
         self.mask = mask
         self.message = message
+        if len(message) > self.MAX_PAYLOAD_LENGTH:
+            raise ValueError("Message size must be less than {n} bytes".format(n=self.MAX_PAYLOAD_LENGTH))
         self.payload_length = len(message)
         self.rsv = rsv
 
