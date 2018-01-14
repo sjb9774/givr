@@ -12,9 +12,10 @@ class TestSocketServer(unittest.TestCase):
         givr.server.threading = Mock()
         self.server = givr.server.SocketServer()
 
-    def test__create_socket(self):
+    @mock.patch("givr.server.socket")
+    def test__create_socket(self, socket):
         self.server._create_socket()
-        givr.server.socket.socket.assert_called_once_with(givr.server.socket.AF_INET, givr.server.socket.SOCK_STREAM)
+        socket.socket.assert_called_once_with(givr.server.socket.AF_INET, givr.server.socket.SOCK_STREAM)
         self.server.socket.bind.assert_called_once_with(("127.0.0.1", 9000))
 
     def test_listen(self):
@@ -34,11 +35,12 @@ class TestSocketServer(unittest.TestCase):
         self.server.socket.accept()[0].close.assert_called_once_with()
         mock_conn.sendall.assert_called_once_with("TEST".encode())
 
-    def test_dlisten(self):
-        givr.server.threading = Mock(Thread=Mock(start=Mock()))
+    @mock.patch("givr.server.threading")
+    def test_dlisten(self, threading):
+        threading.Thread = Mock(start=Mock())
         self.server.dlisten()
-        givr.server.threading.Thread.assert_called_once_with(target=self.server.listen)
-        givr.server.threading.Thread().start.assert_called_once_with()
+        threading.Thread.assert_called_once_with(target=self.server.listen)
+        threading.Thread().start.assert_called_once_with()
 
     def test_connection_handler_with_resp(self):
         self.server.handle_message = Mock(return_value="TEST")
