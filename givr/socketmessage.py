@@ -1,7 +1,7 @@
 import re
 from givr.user import User
 from givr.exceptions import SocketMessageException
-from givr.websocket import WebSocketFrame
+from stevesockets.websocket import WebSocketFrame
 from givr.logging import get_logger
 
 logger = get_logger(__name__)

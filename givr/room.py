@@ -3,7 +3,7 @@ from givr.user import User
 from givr.socketmessage import SocketMessage, WebSocketMessage
 from givr.giveaway import Giveaway
 from givr.logging import get_logger
-from givr.websocket import WebSocketFrame
+from stevesockets.websocket import WebSocketFrame
 import uuid
 import functools
 
@@ -51,7 +51,7 @@ class Room:
 
 
 import socket, select, re, threading, base64, hashlib
-from givr.server import SocketServer, WebSocketServer
+from stevesockets.server import SocketServer, WebSocketServer
 
 class SocketRoom(SocketServer, Room):
 
@@ -143,5 +143,3 @@ class WebSocketRoom(SocketRoom, WebSocketServer):
             return self.delegate_command(msg).to_text()
         except GivrException as err:
             return self.MessageClass(sender=self.room_id, recipient=self.room_id, message=SocketMessage.FAILURE).to_text()
-
-
