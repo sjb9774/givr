@@ -1,6 +1,6 @@
 from givr.exceptions import RoomException, GivrException
 from givr.user import User
-from givr.socketmessage import SocketMessage, WebSocketMessage
+from givr.socketmessage import SocketMessage
 from givr.giveaway import Giveaway
 from givr.logging import get_logger
 from stevesockets.websocket import WebSocketFrame
