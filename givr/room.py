@@ -10,6 +10,41 @@ import functools
 logger = get_logger(__name__)
 
 
+class House:
+
+    _instance = None
+
+    def __init__(self, log=None):
+        if not log:
+            log = logger
+        self.logger = log
+        self.rooms = []
+
+    def add_room(self, room):
+        self.rooms.append(room)
+
+    def remove_room(self, room):
+        self.rooms.remove(room)
+
+    def get_room(self, room_id):
+        r = [room for room in self.rooms if room.room_id == room_id]
+        if len(r) > 1:
+            self.logger.warn("More than one room found with id '{room_id}'?".format(room_id=room_id))
+        elif len(r) == 0:
+            self.logger.error("No rooms foud with id '{room_id}'".format(room_id=room_id))
+            raise RoomException("No rooms foud with id '{room_id}'".format(room_id=room_id))
+        else:
+            return r[0]
+
+    @classmethod
+    def get_instance(cls, log=None):
+        if cls._instance:
+            return cls._instance
+        else:
+            h = House(log=log)
+            cls._instance = h
+            return h
+
 class Room:
     ROOM_ID_LEN = len(str(uuid.uuid1()))
 
