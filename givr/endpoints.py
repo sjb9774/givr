@@ -1,7 +1,10 @@
 from givr.app import app
 from givr.room import WebSocketRoom, House
 from givr.user import User
+from givr.logging import get_logger
 from flask import request, jsonify
+
+logger = get_logger(__name__)
 
 @app.route("/api/room/create", methods=["POST"])
 def api_room_create():
@@ -15,20 +18,34 @@ def api_room_create():
 def api_room_open():
     h = House.get_instance()
     data = request.get_json()
+    room_id = data.get("room_id")
+    room = h.get_room(room_id)
+    room.open()
+    owner_id = data.get("owner_id")
+
+    resp = {"success": True, "address": room.address[0], "port": room.address[1]}
+    if owner_id:
+        room.add_owner(User.from_user_id(owner))
+        resp["owner_id"] = owner_id
+    return jsonify(resp)
+
+@app.route("/api/room/add_user", methods=["POST"])
+def api_room_add_user():
+    h = House.get_instance()
+    data = request.get_json()
     user_id = data.get("user_id")
     room_id = data.get("room_id")
-    room_instance = h.get_room(room_id)
-    room_instance.open()
-    room_instance.add_owner(User.from_user_id(user_id))
-    return jsonify({"success": True})
+    room = h.get_room(room_id)
+    room.add_user(User.from_user_id(user_id))
+    return jsonify({"room_id": room_id, "user_count": len(room.users)})
 
-@app.route("/api/room/status", methods=["GET"])
+@app.route("/api/room/info", methods=["GET"])
 def api_room_get():
     args = request.args
     room = House.get_instance().get_room(args.get("room_id"))
     return jsonify({"room_id": room.room_id,
                     "is_open": room.is_open(),
                     "user_count": len(room.users),
-                    "owner": room.owner.user_id})
-
-    return str(args)
+                    "owner": room.owner.user_id if room.owner else "",
+                    "address": room.address[0],
+                    "port": room.address[1]})

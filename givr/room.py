@@ -31,8 +31,8 @@ class House:
         if len(r) > 1:
             self.logger.warn("More than one room found with id '{room_id}'?".format(room_id=room_id))
         elif len(r) == 0:
-            self.logger.error("No rooms foud with id '{room_id}'".format(room_id=room_id))
-            raise RoomException("No rooms foud with id '{room_id}'".format(room_id=room_id))
+            self.logger.error("No rooms found with id '{room_id}'".format(room_id=room_id))
+            raise RoomException("No rooms found with id '{room_id}'".format(room_id=room_id))
         else:
             return r[0]
 
