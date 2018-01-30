@@ -12,7 +12,7 @@ def api_room_create():
     room = WebSocketRoom()
     h = House.get_instance()
     h.add_room(room)
-    return jsonify({"room_id": room.room_id})
+    return jsonify({"success": True, "room_id": room.room_id})
 
 @app.route("/api/room/open", methods=["POST"])
 def api_room_open():
@@ -37,15 +37,30 @@ def api_room_add_user():
     room_id = data.get("room_id")
     room = h.get_room(room_id)
     room.add_user(User.from_user_id(user_id))
-    return jsonify({"room_id": room_id, "user_count": len(room.users)})
+    return jsonify({"room_id": room_id, "user_count": room.user_count(), "success": True})
+
+@app.route("/api/room/remove_user", methods=["POST"])
+def api_room_remove_user():
+    h = House.get_instance()
+    data = request.get_json()
+    user_id = data.get("user_id")
+    room_id = data.get("room_id")
+    room = h.get_room(room_id)
+    user = User.from_user_id(user_id)
+    if room.has_user(u):
+        room.remove_user(user)
+        resp = {"success": True, "user_count": room.user_count(), "room_id": room.room_id}
+    else:
+        resp = {"success": True, "user_count": room.user_count(), "message": "User not in room"}
+    return jsonify(resp)
 
 @app.route("/api/room/info", methods=["GET"])
-def api_room_get():
+def api_room_info():
     args = request.args
     room = House.get_instance().get_room(args.get("room_id"))
     return jsonify({"room_id": room.room_id,
                     "is_open": room.is_open(),
-                    "user_count": len(room.users),
+                    "user_count": room.user_count(),
                     "owner": room.owner.user_id if room.owner else "",
                     "address": room.address[0],
                     "port": room.address[1]})

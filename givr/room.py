@@ -15,6 +15,8 @@ class House:
     _instance = None
 
     def __init__(self, log=None):
+        if self._instance:
+            raise RuntimeError("House is a Singleton class that should be instantiated with House.get_instance()")
         if not log:
             log = logger
         self.logger = log
@@ -41,7 +43,7 @@ class House:
         if cls._instance:
             return cls._instance
         else:
-            h = House(log=log)
+            h = cls(log=log)
             cls._instance = h
             return h
 
@@ -80,9 +82,17 @@ class Room:
         self.owner = user
         self.add_user(user)
 
+    def has_user(self, user):
+        has_user = user in self.users
+        logger.debug("Room '{r}' has user '{u}'? {b}".format(r=self.room_id, u=user.user_id, b=has_user))
+        return has_user
+
     def remove_user(self, user):
         logger.debug("Removing user '{u}' from room {r}".format(u=user.user_id, r=self.room_id))
         self.users = [u for u in self.users if user.user_id != u.user_id]
+
+    def user_count(self):
+        return len(self.users)
 
 
 import socket, select, re, threading, base64, hashlib
