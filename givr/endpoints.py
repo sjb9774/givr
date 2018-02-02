@@ -29,6 +29,16 @@ def api_room_open():
         resp["owner_id"] = owner_id
     return jsonify(resp)
 
+@app.route("/api/room/close", methods=["POST"])
+def api_room_close():
+    h = House.get_instance()
+    data = request.get_json()
+    room_id = data.get("room_id")
+    room = h.get_room(room_id)
+    room.close()
+    resp = {"success": True, "address": room.address[0], "port": room.address[1]}
+    return jsonify(resp)
+
 @app.route("/api/room/add_user", methods=["POST"])
 def api_room_add_user():
     h = House.get_instance()
@@ -37,7 +47,7 @@ def api_room_add_user():
     room_id = data.get("room_id")
     room = h.get_room(room_id)
     room.add_user(User.from_user_id(user_id))
-    return jsonify({"room_id": room_id, "user_count": room.user_count(), "success": True})
+    return jsonify({"success": True, "room_id": room_id, "user_count": room.user_count()})
 
 @app.route("/api/room/remove_user", methods=["POST"])
 def api_room_remove_user():
@@ -47,7 +57,7 @@ def api_room_remove_user():
     room_id = data.get("room_id")
     room = h.get_room(room_id)
     user = User.from_user_id(user_id)
-    if room.has_user(u):
+    if room.has_user(user):
         room.remove_user(user)
         resp = {"success": True, "user_count": room.user_count(), "room_id": room.room_id}
     else:

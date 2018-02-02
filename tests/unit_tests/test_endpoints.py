@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import Mock
 import json
 from givr.app import app
+from givr.user import User
 from givr.endpoints import *
 import givr.room
 
@@ -43,6 +44,34 @@ class EndpointsTestCase(unittest.TestCase):
         self.assertTrue(self.room.is_open())
         self.assertEqual(json_resp["owner_id"], "TEST USER")
         self.assertEqual(self.room.owner.user_id, "TEST USER")
+
+    def test_endpoint_room_close(self):
+        self.room.open()
+        room_id = self.room.room_id
+        json_resp = self.json_response(path="/api/room/close", method="POST", params={"room_id": room_id})
+        self.assertTrue(json_resp.get("success"))
+        self.assertEqual(json_resp.get("address"), self.room.address[0])
+        self.assertEqual(json_resp.get("port"), self.room.address[1])
+        self.assertFalse(self.room.is_open())
+
+    def test_endpoint_room_add_user(self):
+        user_id = "TEST ADD USER"
+        room_id = self.room.room_id
+        self.room.open()
+        json_resp = self.json_response(path="/api/room/add_user", method="POST", params={"user_id": user_id, "room_id": room_id})
+        self.assertTrue(json_resp.get("success"))
+        self.assertEqual(room_id, json_resp.get("room_id"))
+        self.assertEqual(1, json_resp.get("user_count"))
+
+    def test_endpoint_room_remove_user(self):
+        user_id = "TEST REMOVE USER"
+        room_id = self.room.room_id
+        self.room.open()
+        self.room.add_user(User.from_user_id(user_id))
+        json_resp = self.json_response(path="/api/room/remove_user", method="POST", params={"user_id": user_id, "room_id": self.room.room_id})
+        self.assertTrue(json_resp.get("success"))
+        self.assertEqual(0, json_resp.get("user_count"))
+        self.assertEqual(self.room.room_id, json_resp.get("room_id"))
 
     def test_endpoint_room_info(self):
         json_resp = self.json_response(path="/api/room/info", method="GET", params={"room_id": self.room.room_id})
