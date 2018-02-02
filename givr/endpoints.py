@@ -25,7 +25,7 @@ def api_room_open():
 
     resp = {"success": True, "address": room.address[0], "port": room.address[1]}
     if owner_id:
-        room.add_owner(User.from_user_id(owner))
+        room.add_owner(User.from_user_id(owner_id))
         resp["owner_id"] = owner_id
     return jsonify(resp)
 
@@ -61,6 +61,6 @@ def api_room_info():
     return jsonify({"room_id": room.room_id,
                     "is_open": room.is_open(),
                     "user_count": room.user_count(),
-                    "owner": room.owner.user_id if room.owner else "",
+                    "owner": room.owner.user_id if room.owner else None,
                     "address": room.address[0],
                     "port": room.address[1]})

@@ -178,8 +178,8 @@ class WebSocketRoom(SocketRoom, WebSocketServer):
     MessageClass = SocketMessage
 
     def __init__(self, address=('127.0.0.1', 9000)):
-        SocketRoom.__init__(self, address=address)
         WebSocketServer.__init__(self, address=address, logger=logger)
+        SocketRoom.__init__(self, address=address)
 
     def handle_message(self, conn, data):
         logger.debug("WebSocket data: {d}".format(d=data))
