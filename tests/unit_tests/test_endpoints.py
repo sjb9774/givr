@@ -16,6 +16,8 @@ class EndpointsTestCase(unittest.TestCase):
         self.house = givr.room.House.get_instance()
         self.room = givr.room.WebSocketRoom()
         self.room.address = ("127.0.0.1", 9000) # manually set since we mocked out the WebSocketServer
+        self.room.listening = False
+        self.room.listen = Mock()
         self.house.add_room(self.room)
 
     def tearDown(self):

@@ -9,8 +9,9 @@ logger = get_logger(__name__)
 @app.route("/api/room/create", methods=["POST"])
 def api_room_create():
     data = request.get_json()
-    room = WebSocketRoom()
     h = House.get_instance()
+    port = h.get_available_port()
+    room = WebSocketRoom(address=('127.0.0.1', port))
     h.add_room(room)
     return jsonify({"success": True, "room_id": room.room_id})
 
@@ -21,6 +22,7 @@ def api_room_open():
     room_id = data.get("room_id")
     room = h.get_room(room_id)
     room.open()
+    room.listen()
     owner_id = data.get("owner_id")
 
     resp = {"success": True, "address": room.address[0], "port": room.address[1]}
@@ -36,6 +38,8 @@ def api_room_close():
     room_id = data.get("room_id")
     room = h.get_room(room_id)
     room.close()
+    if room.listening:
+        room.stop_listening()
     resp = {"success": True, "address": room.address[0], "port": room.address[1]}
     return jsonify(resp)
 

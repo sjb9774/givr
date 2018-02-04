@@ -38,6 +38,13 @@ class House:
         else:
             return r[0]
 
+    def get_available_port(self):
+        p = 9000
+        all_ports = [r.address[1] for r in self.rooms]
+        while p in all_ports:
+            p += 1
+        return p
+
     @classmethod
     def get_instance(cls, log=None):
         if cls._instance:
